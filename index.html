@@ -84,6 +84,13 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .pad .z-up { grid-area: zu; } .pad .z-down { grid-area: zd; }
 .cmdline { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--d-line); }
 .cmdline input { flex: 1; min-width: 0; background: var(--d-bg); color: var(--d-ink); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 10px; font: 14px var(--mono); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
+.ask-log { max-height: 320px; overflow-y: auto; padding: 10px 12px; display: grid; gap: 10px; font-size: 14px; }
+.ask-log:empty { display: none; }
+.ask-log p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-log .q { justify-self: end; max-width: 85%; background: var(--d-head); border-radius: 10px 10px 2px 10px; padding: 6px 10px; }
+.ask-log .a { color: var(--d-ink); } .ask-log .a.e { color: #ff7b72; } .ask-log .a.wait { color: var(--d-muted); }
+.ask-log code { font: 12px var(--mono); background: var(--d-bg); border: 1px solid var(--d-line); border-radius: 4px; padding: 0 4px; }
+.ask-log button.code { min-height: 0; padding: 0 5px; font: 12px var(--mono); color: var(--d-accent); background: var(--d-bg); border: 1px dashed var(--d-line); border-radius: 4px; }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
 @media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
 </style>
@@ -179,6 +186,11 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         </div>
         <pre class="console" id="console" aria-live="off"></pre>
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
+      </section>
+      <section class="card wide">
+        <h2>Ask about Quadro <small>answered by Claude · tap a command to put it in the console</small></h2>
+        <div class="ask-log" id="ask-log" aria-live="polite"></div>
+        <form class="cmdline" id="ask-form" autocomplete="off"><input id="ask" type="text" maxlength="600" placeholder="How does a toolchange work?" aria-label="Question about Quadro"><button type="submit">Ask</button></form>
       </section>
     </div>
     <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower. The console runs the printer's own Klipper configuration, its macros and its toolchange, homing and calibration modules, right in the browser: anything typed there behaves as it would on the machine. Heaters and the bed surface are simulated (the bed follows the printer's saved mesh); load cell forces and accelerometer readings are not.</p>
@@ -1215,6 +1227,47 @@ document.querySelectorAll("[data-jog]").forEach((b) => b.addEventListener("click
   const axis = b.dataset.jog[0], sign = b.dataset.jog[1] === "-" ? -1 : 1;
   submit("G91"); submit("G1 " + axis + (sign * jogStep) + " F" + (axis === "Z" ? 1500 : 6000)); submit("G90");
 }));
+// ---------- "Ask about Quadro": questions go to a small Cloudflare Worker that holds the API key and asks Claude ----------
+const ASK_URL = "https://quadro-ask.huseyin-926.workers.dev";
+const askLog = $("ask-log"), askForm = $("ask-form"), askInput = $("ask"), askHistory = [];
+function askState() {
+  const xs = sx.map((x, j) => "T" + j + " " + (x - PRINT_SX0).toFixed(1)).join(", ");
+  return "Print: " + (job === "printing" ? (playing ? "printing" : "paused") + ", layer " + (layer + 1) + " of " + LAYERS : job) +
+    ". Active tool: " + (active < 0 ? "none" : "T" + active) + ". Carriage X (mm): " + xs + ". Bed Y: " + ny.toFixed(1) + ".";
+}
+// plain text with **bold** and `code`; code that names a command becomes a button that fills the console
+function askRender(el, text) {
+  el.textContent = "";
+  for (const part of text.split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+    if (/^\*\*.+\*\*$/.test(part)) { const b = document.createElement("b"); b.textContent = part.slice(2, -2); el.append(b); }
+    else if (/^`.+`$/.test(part)) {
+      const t = part.slice(1, -1), cmd = /^[A-Z][A-Z0-9_]*\b/.test(t) && K && K.commandNames().includes(t.split(/\s/)[0].toUpperCase());
+      const c = document.createElement(cmd ? "button" : "code"); c.textContent = t;
+      if (cmd) { c.className = "code"; c.type = "button"; c.addEventListener("click", () => { cmdInput.value = t; cmdInput.focus(); }); }
+      el.append(c);
+    } else el.append(part);
+  }
+}
+askForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = askInput.value.trim();
+  if (!question || askForm.dataset.busy) return;
+  askInput.value = ""; askForm.dataset.busy = "1";
+  const q = document.createElement("p"); q.className = "q"; q.textContent = question;
+  const a = document.createElement("p"); a.className = "a wait"; a.textContent = "Thinking…";
+  askLog.append(q, a); askLog.scrollTop = askLog.scrollHeight;
+  try {
+    const res = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history: askHistory.slice(-12), state: askState() }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.answer) throw new Error(data.error || "The assistant is unavailable right now.");
+    a.className = "a"; askRender(a, data.answer);
+    askHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
+  } catch (err) {
+    a.className = "a e"; a.textContent = err instanceof TypeError ? "The assistant can't be reached from this copy of the page." : err.message;
+  }
+  delete askForm.dataset.busy; askLog.scrollTop = askLog.scrollHeight;
+});
+
 fetch(CONFIG_URL).then((r) => r.json()).then((config) => { startKlipper(config); addPin(config.bedPin.T0); }).catch((e) => log("!! Could not load the printer config: " + e.message, "e"));
 
 // ---------- loop ----------
