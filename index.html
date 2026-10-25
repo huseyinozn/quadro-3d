@@ -104,6 +104,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
       <button id="play" data-play aria-pressed="true">Pause</button>
       <button id="restart">Restart</button>
       <button id="skip">Skip 10 layers</button>
+      <button id="clear-bed">Clear bed</button>
       <span class="label">Playback</span>
       <span class="speed" id="speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button></span>
     </div>
@@ -218,7 +219,8 @@ const LCD_ID = "NAUO266";
 // The screen hinges on its gear (axis along x); users tilt it to 45 degrees.
 const LCD_HINGE = [-30.5, 51.5], LCD_TILT = 45;
 // Qdock nozzle closers: spring-loaded silicone caps, one per slot, pressed down when a nozzle parks on them.
-const CAP_PAIRS = [["NAUO73", "NAUO74"], ["NAUO79", "NAUO78"], ["NAUO81", "NAUO80"], ["NAUO66", "NAUO61"], ["NAUO62", "NAUO63"], ["NAUO65", "NAUO64"]];
+// The updated assembly renumbers them, so they are found by part name and grouped per slot by position.
+const CAP_PART = /^NAUO\d+:(nozzle-closer2|Quadro-x-inject-plastic-4)$/;
 const CAP_PRESS = 2.5, CAP_REACH = 8;                              // mm of travel, mm from the cap centre where the dome is touched
 // The head cable plug floats 20 mm above its socket in the export; seat it.
 const PLUG_DROP = 15;
@@ -341,7 +343,7 @@ let center = new THREE.Vector3(), radius = 1;
 const trails = new THREE.Group();
 bedGroup.add(trails);
 
-const plugs = [], caps = [], headLeds = [];
+const plugs = [], caps = [], capParts = [], headLeds = [];
 // move an object by a world-space offset (mm), whatever its parent's frame
 function nudge(obj, dx, dy, dz) {
   obj.updateWorldMatrix(true, false);
@@ -525,6 +527,7 @@ loadModel().then((gltf) => {
     const at = gltf.parser.associations.get(o);
     const raw = at && at.nodes !== undefined ? gltf.parser.json.nodes[at.nodes].name || "" : "";
     const id = raw.split(":")[0]; if (id && !byId[id]) byId[id] = o;
+    if (CAP_PART.test(raw) && !capParts.some((c) => c.getObjectById(o.id))) capParts.push(o);
     if (o.isMesh) {
       let path = "", n = o;
       while (n) { path += " " + n.name; n = n.parent; }
@@ -563,13 +566,17 @@ loadModel().then((gltf) => {
     head.traverse((o) => { if (!plugs[j] && /kablo/i.test(o.name)) plugs[j] = o; });
     if (plugs[j]) nudge(plugs[j], 0, -PLUG_DROP, 0);
   });
-  for (const pair of CAP_PAIRS) {
-    const parts = pair.map((id) => byId[id]).filter(Boolean);
-    if (!parts.length) continue;
+  const slots = [];
+  for (const part of capParts) {
+    const b = new THREE.Box3().setFromObject(part), x = ((b.min.x + b.max.x) / 2) * 1000;
+    let s = slots.find((s) => Math.abs(s.x - x) < 10);
+    if (!s) slots.push((s = { x, parts: [] }));
+    s.parts.push(part);
+  }
+  for (const s of slots) {
     const cg = new THREE.Group(); zGroup.add(cg);
-    const cb = new THREE.Box3();
-    for (const part of parts) { cb.expandByObject(part); cg.attach(part); }
-    caps.push({ group: cg, x: ((cb.min.x + cb.max.x) / 2) * 1000 });
+    for (const part of s.parts) cg.attach(part);
+    caps.push({ group: cg, x: s.x });
   }
   buildRuns();
   addRoom();
@@ -964,12 +971,23 @@ function growBlocks() {
     const below = tier * PER_TIER;
     let n = Math.max(0, Math.min(PER_TIER, layer - below + (done.has(q) && Math.floor(layer / PER_TIER) === tier ? 1 : 0)));
     if (layer >= below + PER_TIER) n = PER_TIER;
-    mesh.visible = n > 0;
+    mesh.visible = n > 0 && !bedCleared;
     if (n > 0) { const h = n * LAYER_H; mesh.scale.y = h / 1000; mesh.position.y = (PEI_TOP + tier * TIER + h / 2) / 1000; }
   }
   dirty = true;
 }
+// "Clear bed" lifts the printed part, purge tower and test lines off the plate. A running print is cancelled
+// first (CANCEL_PRINT, the printer's own macro); whatever it still lays down before stopping stays hidden.
+let bedCleared = false;
+function clearBed() {
+  if (job === "printing" || saved) submit("CANCEL_PRINT");
+  bedCleared = true; trails.visible = tower.visible = false;
+  for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
+  meshDots.clear(); growBlocks();
+  log("; bed cleared", "c");
+}
 function restart(toLayer = 0, quiet = false) {
+  bedCleared = false; trails.visible = tower.visible = true;
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
   phase.end = null; queue = []; cmdQueue = []; saved = null; handover = null; pendingLines = [];
   job = "printing";
@@ -1224,6 +1242,7 @@ controls.addEventListener("change", run);
 const playBtn = document.getElementById("play");
 function setPlaying(on) { playing = on; playBtn.textContent = on ? "Pause" : "Play"; playBtn.setAttribute("aria-pressed", String(on)); run(); }
 playBtn.addEventListener("click", () => setPlaying(!playing));
+document.getElementById("clear-bed").addEventListener("click", clearBed);
 document.getElementById("restart").addEventListener("click", () => { restart(0); setPlaying(true); });
 document.getElementById("skip").addEventListener("click", () => { if (phase.kind !== "done") { restart(Math.min(LAYERS - 1, layer + 10)); setPlaying(true); } });
 document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
