@@ -70,6 +70,18 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .console .t { color: var(--d-muted); } .console .e { color: #ff7b72; } .console .u { color: #fff; font-weight: 600; }
 .macros { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; }
 .macros button, .cmdline button { background: var(--d-head); color: var(--d-ink); border-color: var(--d-line); min-height: 34px; padding: 4px 12px; font: 500 13px var(--mono); }
+.examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px 0; }
+.examples span { width: 100%; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; }
+.examples button { background: transparent; color: var(--d-accent); border: 1px dashed var(--d-line); min-height: 30px; padding: 3px 10px; font: 12px var(--mono); }
+.jog { display: grid; gap: 10px; }
+.jog button { background: var(--d-head); color: var(--d-ink); border-color: var(--d-line); min-height: 38px; padding: 4px 10px; font: 500 13px var(--mono); }
+.homes, .steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.homes button:first-child { flex: 1; }
+.steps button { flex: 1; min-width: 0; padding: 4px 0; }
+.steps button[aria-pressed="true"] { background: var(--d-accent); border-color: var(--d-accent); color: #fff; }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr) 12px 1fr; grid-template-areas: ". yu . . zu" "xl . xr . ." ". yd . . zd"; gap: 6px; }
+.pad .y-up { grid-area: yu; } .pad .x-left { grid-area: xl; } .pad .x-right { grid-area: xr; } .pad .y-down { grid-area: yd; }
+.pad .z-up { grid-area: zu; } .pad .z-down { grid-area: zd; }
 .cmdline { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--d-line); }
 .cmdline input { flex: 1; min-width: 0; background: var(--d-bg); color: var(--d-ink); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 10px; font: 14px var(--mono); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
@@ -127,16 +139,35 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         </div>
       </section>
       <section class="card">
+        <h2>Move <small>sends G91 · G1 · G90</small></h2>
+        <div class="body jog">
+          <div class="homes"><button data-cmd="G28">Home all</button><button data-cmd="G28 X">X</button><button data-cmd="G28 Y">Y</button><button data-cmd="G28 Z">Z</button></div>
+          <div class="pad">
+            <button data-jog="Y+" class="y-up">Y+</button><button data-jog="X-" class="x-left">X−</button><button data-jog="X+" class="x-right">X+</button><button data-jog="Y-" class="y-down">Y−</button>
+            <button data-jog="Z+" class="z-up">Z+</button><button data-jog="Z-" class="z-down">Z−</button>
+          </div>
+          <div class="steps" role="group" aria-label="Step size"><button data-step="0.1" aria-pressed="false">0.1</button><button data-step="1" aria-pressed="false">1</button><button data-step="10" aria-pressed="true">10</button><button data-step="25" aria-pressed="false">25</button><button data-step="50" aria-pressed="false">50</button><button data-step="100" aria-pressed="false">100</button></div>
+        </div>
+      </section>
+      <section class="card">
         <h2>Tools</h2>
         <div class="body"><table><thead><tr><th>Tool</th><th>Carriage X</th><th>State</th></tr></thead><tbody id="tools"></tbody></table></div>
       </section>
-      <section class="card">
+      <section class="card wide">
         <h2>Last toolchange <small id="tc-time">—</small></h2>
         <div class="body"><table><thead><tr><th>Axis</th><th>From → to</th><th>Peak</th><th>Start</th></tr></thead><tbody id="tc"></tbody></table></div>
       </section>
       <section class="card wide">
         <h2>Console <small>try G28, T2, G1 X150 Y100 F6000, M114 or HELP</small></h2>
         <div class="macros"><button data-cmd="G28">G28</button><button data-cmd="T0">T0</button><button data-cmd="T1">T1</button><button data-cmd="T2">T2</button><button data-cmd="T3">T3</button><button data-cmd="PAUSE">PAUSE</button><button data-cmd="RESUME">RESUME</button><button data-cmd="M114">M114</button><button data-cmd="HELP">HELP</button></div>
+        <div class="examples"><span>Examples (tap to edit, then Send)</span>
+          <button data-fill="QUADRO_PARALLEL_MOVE T0=40 T1=110 T2=180 T3=250 Y=150 SPEED=350">QUADRO_PARALLEL_MOVE</button>
+          <button data-fill="QUADRO_PARALLEL_MOVE T0=-169 T1=-112.75 T2=-56.5 T3=150 Y=150 SPEED=350 ARRIVING=T3">… ARRIVING=T3</button>
+          <button data-fill="BED_PIN_CALIBRATE_TOOL TOOL=T2 CYCLES=1">BED_PIN_CALIBRATE_TOOL</button>
+          <button data-fill="BED_PIN_CALIBRATE_ALL">BED_PIN_CALIBRATE_ALL</button>
+          <button data-fill="QUADRO_CUSTOM_BED_MESH REPEATS=1">QUADRO_CUSTOM_BED_MESH</button>
+          <button data-fill="AXIS_SLIP_TEST AXIS=Y TOOL=T0 ACCEL=7000 VELOCITY=300">AXIS_SLIP_TEST</button>
+        </div>
         <pre class="console" id="console" aria-live="off"></pre>
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
       </section>
@@ -929,13 +960,14 @@ function growBlocks() {
 }
 function restart(toLayer = 0) {
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
-  phase.end = null; queue = []; cmdQueue = []; saved = null; pauseWanted = null; job = "printing"; absolute = true; velNow = LIMITS.v; accelNow = LIMITS.a;
+  phase.end = null; queue = []; cmdQueue = []; saved = null; pauseWanted = null;
+  job = "printing"; absolute = true; velNow = LIMITS.v; accelNow = LIMITS.a;
   // place the heads as the printer would have them: the active tool over the part, the others parked either side
   active = fillTower(toLayer); setActive(active);
   sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
   if (active >= 0) ny = CUBE_Y0;
   layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle" };
-  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; consoleEl.textContent = ""; log("START_PRINT", "c"); }
+  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); consoleEl.textContent = ""; log("START_PRINT", "c"); }
   else log("; skipped to layer " + (toLayer + 1), "c");
   lastPos = null; vel = 0;
   growBlocks(); draw(); run();
@@ -1138,11 +1170,165 @@ function g1(p) {
     return { x: sx.map((v, k) => (k === active ? PRINT_SX0 + tgt[0] : v)), y: tgt[1], z: tgt[2] };
   }, () => feed)];
 }
+// ---------- the printer's own calibration modules (klippy/extras) ----------
+// bed_pin_calibration.py: per-tool pin positions from bed_pin_tool_positions.json (the printer's last calibration)
+const PIN = {
+  T0: { top_x: 252.36, top_y: 305.195, top_z: 1.79 }, T1: { top_x: 252.2, top_y: 305.295, top_z: 1.73 },
+  T2: { top_x: 250.615, top_y: 305.09, top_z: 1.77 }, T3: { top_x: 250.13, top_y: 304.645, top_z: 1.82 },
+};
+const PIN_BOX = { left_x: 243, right_x: 259, front_y: 300, back_y: 311, side_z_margin: 1 };
+const PIN_R = 3;                          // pin radius + nozzle tip radius: where a side touch registers (not in the config; a stand-in)
+const OFFSETS_PATH = "/home/cp/printer_data/config/bed_pin_offsets.json";
+// the calibration pin at the back of the bed, drawn where the config says it is
+const pinMesh = new THREE.Mesh(new THREE.CylinderGeometry((PIN_R - 0.5) / 1000, (PIN_R - 0.5) / 1000, PIN.T0.top_z / 1000, 24), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 0.8, roughness: 0.3 }));
+pinMesh.position.set(-(PRINT_SX0 + PIN.T0.top_x) / 1000, (PEI_TOP + PIN.T0.top_z / 2) / 1000, (PRINT_Z0 + PIN.T0.top_y) / 1000);
+bedGroup.add(pinMesh);
+let pinResults = {};
+const f5 = (v) => v.toFixed(5);
+// coarse 0.2 mm steps until the load cell trips, back off 1 mm, then 0.01 mm steps: shown as a quick then a slow approach
+function touch(label, axis, dir, contact) {
+  const k = "xyz".indexOf(axis), at = () => [phys(sx[active]), ny, zAbs()];
+  const goto = (v, speed) => lineMove(label, () => {
+    const p = at(); p[k] = v;
+    return { x: sx.map((x, j) => (j === active ? PRINT_SX0 + p[0] : x)), y: p[1], z: p[2] };
+  }, speed);
+  return [dwell(0.2, label), goto(contact, axis === "z" ? 2 : 3), goto(contact - dir, axis === "z" ? 5 : 20), dwell(0.45, label), goto(contact, 0.4)];
+}
+const zTo = (z, speed, label) => lineMove(label, () => ({ z }), speed);
+const xyTo = (x, y, speed, label) => lineMove(label, () => ({ x: sx.map((v, j) => (j === active ? PRINT_SX0 + x : v)), y }), speed);
+// _prepare_tool_at: Z 5, park the other carriages (right side first, then left), the tool goes over the pin
+function prepareTool(j, x, y, label) {
+  const others = [3, 2, 1, 0].filter((k) => k > j).concat([0, 1, 2].filter((k) => k < j));
+  return [zTo(5, 5, label), ...others.map((k) => moveCarriage(k, k < j ? X_PARK_L[k] : X_PARK_R[k - 1], 50, label)),
+    instant(() => activate(j)), xyTo(x, y, 50, label), zTo(5, 2, label)];
+}
+function pinCycle(j, cycle, total, label, full = true) {
+  const t = "T" + j, pin = PIN[t], sideZ = pin.top_z - PIN_BOX.side_z_margin;
+  const side = (x, y) => [zTo(5, 5, label), xyTo(x, y, 50, label), zTo(sideZ, 2, label)];
+  return [...(full ? prepareTool(j, pin.top_x, pin.top_y, label) : [xyTo(pin.top_x, pin.top_y, 50, label), zTo(5, 2, label)]),
+    ...touch(label, "z", -1, pin.top_z), zTo(5, 5, label),
+    ...side(PIN_BOX.left_x, pin.top_y), ...touch(label, "x", 1, pin.top_x - PIN_R),
+    ...side(PIN_BOX.right_x, pin.top_y), ...touch(label, "x", -1, pin.top_x + PIN_R),
+    ...side(pin.top_x, PIN_BOX.front_y), ...touch(label, "y", 1, pin.top_y - PIN_R),
+    ...side(pin.top_x, PIN_BOX.back_y), ...touch(label, "y", -1, pin.top_y + PIN_R), zTo(5, 5, label),
+    instant(() => {
+      pinResults[t] = { x: pin.top_x, y: pin.top_y, z: pin.top_z };
+      say("BED_PIN_CALIBRATE_TOOL " + t + " cycle " + (cycle + 1) + "/" + total + ": Z=" + f5(pin.top_z) + " X_LEFT=" + f5(pin.top_x - PIN_R) + " X_RIGHT=" + f5(pin.top_x + PIN_R) +
+        " Y_BACK=" + f5(pin.top_y + PIN_R) + " Y_FRONT=" + f5(pin.top_y - PIN_R) + " CENTER_X=" + f5(pin.top_x) + " CENTER_Y=" + f5(pin.top_y));
+    })];
+}
+function pinCalibrateTool(p) {
+  const t = String(p.TOOL ?? "T0").toUpperCase().replace(/^(\d)$/, "T$1"), j = Number(t.slice(1));
+  if (!PIN[t]) return err("Unknown TOOL=" + t);
+  const label = "Bed pin " + t, cycles = p.CYCLES === 1 ? 1 : p.FIRST === 1 ? 3 : 2, out = p.RESET === 0 ? [] : home([]);
+  for (let i = 0; i < cycles; i++) out.push(...pinCycle(j, i, cycles, label, i === 0));
+  if (cycles > 1) out.push(instant(() => {
+    const r = pinResults[t];
+    say("BED_PIN_CALIBRATE_TOOL " + t + " COMPARE: A CENTER_X=" + f5(r.x) + " CENTER_Y=" + f5(r.y) + " Z=" + f5(r.z) + " B CENTER_X=" + f5(r.x) + " CENTER_Y=" + f5(r.y) + " Z=" + f5(r.z) + " DELTA_X=0.00000 DELTA_Y=0.00000 DELTA_Z=0.00000 PASS");
+  }));
+  return out;
+}
+const offsetsVsT0 = () => ["T0", "T1", "T2", "T3"].map((t) => [t, pinResults[t].x - pinResults.T0.x, pinResults[t].y - pinResults.T0.y, pinResults[t].z - pinResults.T0.z]);
+function pinCalibrateAll() {
+  const out = [instant(() => (pinResults = {})), ...home([])];
+  for (let j = 0; j < 4; j++) out.push(...pinCycle(j, 0, 1, "Bed pin T" + j));
+  out.push(instant(() => say("BED_PIN_CALIBRATE_ALL OFFSETS vs T0: " + offsetsVsT0().map(([t, x, y, z]) => t + " X=" + f5(x) + " Y=" + f5(y) + " Z=" + f5(z)).join(" "))));
+  return out;
+}
+
+// axis_slip_test.py: touch the pin, run a burst at the requested accel/velocity, touch again, compare
+function burstScript(axis, accel, velocity, lo, hi, repeat) {
+  const mid = (lo + hi) / 2, fast = Math.round(velocity * 60), lead = 20, short = 20, hopD = 40, L = [];
+  const g = (v, f) => L.push("G1 " + axis + v.toFixed(3) + " F" + f), limit = (a, v) => L.push("SET_VELOCITY_LIMIT" + (v !== undefined ? " VELOCITY=" + v : "") + (a !== undefined ? " ACCEL=" + a : ""));
+  L.push("G90"); limit(2000, 100); L.push("G1 Z10.000 F600");
+  if (axis === "X") L.push("G1 Y150.000 F6000");
+  g(mid, 3000);
+  for (let r = 0; r < repeat; r++) {
+    limit(accel, velocity);
+    for (const t of [hi, lo, hi, lo, mid]) { L.push("G4 P500"); g(t, fast); }
+    g(mid - lead, 1800); g(lo, fast);
+    for (let i = 0; i < 2; i++) { g(lo + lead, 1800); g(hi, fast); g(hi - lead, 1800); g(lo, fast); }
+    g(lo + lead, 1800); g(hi, fast);
+    for (let i = 0; i < 2; i++) { limit(1000); g(hi - lead, 3000); limit(accel); g(lo, fast); limit(1000); g(lo + lead, 3000); limit(accel); g(hi, fast); }
+    for (let i = 0; i < 10; i++) { g(mid - short, fast); g(mid + short, fast); }
+    g(mid, 1800);
+    for (const t of [lo, lo + hopD, lo, hi, hi - hopD, hi, lo, lo + hopD, lo, hi]) g(t, fast);
+    g(hi - lead, 1800); g(lo, fast);
+  }
+  limit(2000, 100); g(mid, 3000);
+  return L;
+}
+function slipTest(p, accels, name) {
+  const axis = String(p.AXIS ?? "Y").toUpperCase(), t = String(p.TOOL ?? "T0").toUpperCase().replace(/^(\d)$/, "T$1");
+  if (axis !== "X" && axis !== "Y") return err("AXIS must be X or Y");
+  if (!PIN[t]) return err("Unknown TOOL=" + t);
+  if (job === "printing" || job === "paused") return err("Run this test only while the printer is idle");
+  const j = Number(t[1]), velocity = p.VELOCITY ?? 300, repeat = p.REPEAT ?? 1, probeOnly = p.PROBE_ONLY === 1, tol = p.TOLERANCE ?? 0.15;
+  const lo = p.MIN ?? 50, hi = p.MAX ?? 250, pin = PIN[t], sideZ = pin.top_z - PIN_BOX.side_z_margin, tag = name + " " + axis + " " + t, label = "Axis slip test";
+  if (hi - lo < 100) return err("MAX - MIN must be at least 100 mm");
+  const contact = axis === "X" ? pin.top_x - PIN_R : pin.top_y - PIN_R;
+  const touchPin = () => [zTo(5, 5, label), axis === "X" ? xyTo(PIN_BOX.left_x, pin.top_y, 50, label) : xyTo(pin.top_x, PIN_BOX.front_y, 50, label),
+    zTo(sideZ, 3, label), ...touch(label, axis.toLowerCase(), 1, contact), axis === "X" ? xyTo(contact - 1, pin.top_y, 20, label) : xyTo(pin.top_x, contact - 1, 20, label), zTo(5, 5, label)];
+  let orig;
+  const out = [instant(() => { orig = [velNow, accelNow]; velNow = 100; accelNow = 2000; say(tag + " version=2026-10-09-compatible-1 PROBE_ONLY=" + (probeOnly ? 1 : 0)); }),
+    ...prepareTool(j, pin.top_x, pin.top_y, label), ...touch(label, "z", -1, pin.top_z), zTo(5, 5, label),
+    ...touchPin(), instant(() => say(tag + " REFERENCE=" + f5(contact) + " SIDE_Z=" + f5(sideZ)))];
+  for (const accel of probeOnly ? Array(repeat).fill(null) : accels) {
+    if (!probeOnly) for (const line of burstScript(axis, accel, velocity, lo, hi, repeat)) { const c = parse(line); out.push(...(dispatch(c.cmd, c.p, c.words, label) || [])); }
+    out.push(...touchPin(), instant(() => say(tag + " ACCEL=" + (accel === null ? "None" : accel.toFixed(1)) + " VEL=" + (probeOnly ? "None" : velocity.toFixed(1)) +
+      " BEFORE=" + f5(contact) + " AFTER=" + f5(contact) + " DIFF=+0.00000 STEP_DIFF=+0.00000 mm TOL=" + tol.toFixed(3) + " -> OK")));
+  }
+  out.push(instant(() => { [velNow, accelNow] = orig; say("Selected tool remains " + t + "; its stored bed-pin offsets were requested."); }));
+  return out;
+}
+
+// bed mesh: the 9 x 9 probe path of [bed_mesh] (5..295 mm), serpentine like Klipper's standard path
+const meshDots = new THREE.Group();
+bedGroup.add(meshDots);
+const dotGeo = new THREE.CylinderGeometry(0.0012, 0.0012, 0.0004, 12), dotMat = new THREE.MeshBasicMaterial({ color: 0x4f8ff7 });
+function meshPath() {
+  const pts = [], n = 9, step = (295 - 5) / (n - 1);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) pts.push([5 + (r % 2 ? n - 1 - c : c) * step, 5 + r * step]);
+  return pts;
+}
+function markPoint(x, y) {
+  const d = new THREE.Mesh(dotGeo, dotMat);
+  d.position.set(-(PRINT_SX0 + x) / 1000, (PEI_TOP + 0.3) / 1000, (PRINT_Z0 + y) / 1000); meshDots.add(d); dirty = true;
+}
+function bedMesh(custom, p) {
+  const label = "Bed mesh", repeats = custom ? (p.REPEATS ?? 2) : 1, pts = meshPath(), out = [];
+  if (!custom) {
+    // QUADRO_BED_MESH_CALIBRATE: T3, T2, T1 to the right Qdock, T0 to the centre, Z 5, then BED_MESH_CALIBRATE
+    out.push(moveCarriage(3, 469, 150, label), moveCarriage(2, 412.75, 150, label), moveCarriage(1, 356.5, 150, label), instant(() => activate(0)),
+      lineMove(label, () => (xRange(0)[1] >= 150 ? { x: sx.map((v, k) => (k === 0 ? PRINT_SX0 + 150 : v)), y: 150 } : null), 100), zTo(5, 5, label));
+  } else if (active !== 0) out.push(...toolMacro(0));
+  out.push(instant(() => { meshDots.clear(); dirty = true; }));
+  for (let pass = 0; pass < repeats; pass++) {
+    if (custom) out.push(instant(() => say("===== QUADRO MESH PASS " + (pass + 1) + "/" + repeats + " =====")));
+    pts.forEach(([x, y], i) => {
+      out.push(zTo(3, i === 0 ? 30 : 5, label), xyTo(x, y, 30, label));
+      if (custom) out.push(dwell(0.5, label), instant(() => say("Quadro mesh pass " + (pass + 1) + "/" + repeats + " point " + (i + 1) + "/" + pts.length + ": X=" + x.toFixed(2) + " Y=" + y.toFixed(2))));
+      // probe at 3 mm/s; [load_cell_probe] takes 3 samples with a 1 mm retract (the custom mesh takes 1)
+      out.push(zTo(0, 3, label));
+      if (!custom) for (let s = 0; s < 2; s++) out.push(zTo(1, 5, label), zTo(0, 3, label));
+      out.push(instant(() => markPoint(x, y)));
+    });
+    out.push(zTo(3, 5, label));
+    if (custom) out.push(instant(() => say("===== QUADRO MESH PASS " + (pass + 1) + "/" + repeats + " COMPLETE =====")));
+  }
+  out.push(instant(() => say("Mesh Bed Leveling Complete")));
+  return out;
+}
+
 const HELP = [
   "G28 [X] [Y] [Z]  home (the printer's homing_override)", "T0 / T1 / T2 / T3  toolchange macro", "G0 / G1 X Y Z F  move the active tool",
   "G90 / G91  absolute / relative moves", "G4 P<ms>  dwell", "M114  report position",
   "QUADRO_PARALLEL_MOVE T0= T1= T2= T3= Y= Z= SPEED= [ARRIVING=Tn]", "SET_DUAL_CARRIAGE CARRIAGE=carriage_t<n>",
-  "SET_VELOCITY_LIMIT VELOCITY= ACCEL=  /  M204 S<accel>", "PAUSE / RESUME / CANCEL_PRINT / PARK_TOOLHEAD", "START_PRINT  print the cube again"];
+  "SET_VELOCITY_LIMIT VELOCITY= ACCEL=  /  M204 S<accel>", "PAUSE / RESUME / CANCEL_PRINT / PARK_TOOLHEAD", "START_PRINT  print the cube again",
+  "QUADRO_BED_MESH_CALIBRATE  /  QUADRO_CUSTOM_BED_MESH [REPEATS=2]", "BED_PIN_CALIBRATE_TOOL TOOL=Tn [CYCLES=1]  /  BED_PIN_CALIBRATE_ALL",
+  "BED_PIN_SAVE_OFFSETS  /  BED_PIN_APPLY_OFFSET TOOL=Tn",
+  "AXIS_SLIP_TEST AXIS=X|Y TOOL=Tn ACCEL= VELOCITY= [MIN= MAX= REPEAT= PROBE_ONLY=1]  (printer idle: CANCEL_PRINT first)",
+  "AXIS_SLIP_SWEEP AXIS=X|Y START= END= STEP= VELOCITY="];
 function parse(line) {
   const words = line.trim().split(/\s+/), cmd = words.shift().toUpperCase(), p = {};
   for (const w of words) {
@@ -1151,45 +1337,69 @@ function parse(line) {
   }
   return { cmd, p, words };
 }
-const MOTION = new Set(["G28", "G0", "G1", "T0", "T1", "T2", "T3", "QUADRO_PARALLEL_MOVE", "PARK_TOOLHEAD", "SET_DUAL_CARRIAGE", "G4"]);
+const MOTION = new Set(["G28", "G0", "G1", "T0", "T1", "T2", "T3", "QUADRO_PARALLEL_MOVE", "PARK_TOOLHEAD", "SET_DUAL_CARRIAGE", "G4",
+  "QUADRO_BED_MESH_CALIBRATE", "QUADRO_CUSTOM_BED_MESH", "BED_MESH_CALIBRATE", "BED_PIN_CALIBRATE_TOOL", "BED_PIN_CALIBRATE_ALL"]);
+// one command -> the phases it runs; also used for the G-code a module runs internally
+function dispatch(cmd, p, words) {
+  switch (cmd) {
+    case "HELP": HELP.forEach((h) => say(h)); return null;
+    case "G28": return home(words.map((w) => w.toUpperCase()).filter((w) => "XYZ".includes(w)));
+    case "G0": case "G1": return g1(p);
+    case "G90": return [instant(() => (absolute = true))];
+    case "G91": return [instant(() => (absolute = false))];
+    case "G4": return [dwell((p.P || 0) / 1000)];
+    case "M400": return null;
+    case "M114": return [instant(() => log("X:" + n3(phys(sx[active])) + " Y:" + n3(ny) + " Z:" + n3(zAbs()) + " E:0.000"))];
+    case "T0": case "T1": case "T2": case "T3": return toolMacro(Number(cmd[1]));
+    case "QUADRO_PARALLEL_MOVE": return parallelCommand(p);
+    case "SET_DUAL_CARRIAGE": {
+      const j = Number(String(p.CARRIAGE || "").replace("carriage_t", ""));
+      if (!(j >= 0 && j <= 3)) { err("Unknown carriage"); return null; }
+      return [instant(() => activate(j))];
+    }
+    case "SET_VELOCITY_LIMIT": return [instant(() => { if (p.VELOCITY) velNow = Math.min(p.VELOCITY, 1e4); if (p.ACCEL) accelNow = p.ACCEL; })];
+    case "M204": return [instant(() => { if (p.S) accelNow = p.S; })];
+    case "PARK_TOOLHEAD": return parkToolhead();
+    case "QUADRO_BED_MESH_CALIBRATE": case "BED_MESH_CALIBRATE": return bedMesh(false, p);
+    case "QUADRO_CUSTOM_BED_MESH": return bedMesh(true, p);
+    case "BED_PIN_CALIBRATE_TOOL": return pinCalibrateTool(p);
+    case "BED_PIN_CALIBRATE_ALL": return pinCalibrateAll();
+    case "BED_PIN_SAVE_OFFSETS": {
+      const missing = ["T0", "T1", "T2", "T3"].filter((t) => !pinResults[t]);
+      if (missing.length) { err("Refusing to overwrite offsets with incomplete calibration. Missing: " + missing.join(", ") + ". Run BED_PIN_CALIBRATE_ALL first."); return null; }
+      say("Offsets saved to " + OFFSETS_PATH + ":\n" + offsetsVsT0().map(([t, x, y, z]) => t + ": X=" + x.toFixed(3) + " Y=" + y.toFixed(3) + " Z=" + z.toFixed(3)).join("\n"));
+      return null;
+    }
+    case "BED_PIN_APPLY_OFFSET": {
+      const t = String(p.TOOL ?? "T0").toUpperCase();
+      if (!PIN[t]) { err("Unknown TOOL=" + t); return null; }
+      say("Applied offset for " + t + ": X=" + f5(PIN[t].top_x - PIN.T0.top_x) + " Y=" + f5(PIN[t].top_y - PIN.T0.top_y) + " Z=" + f5(PIN[t].top_z - PIN.T0.top_z));
+      return null;
+    }
+    case "AXIS_SLIP_TEST": return slipTest(p, [p.ACCEL ?? 7000], "AXIS_SLIP_TEST");
+    case "AXIS_SLIP_SWEEP": {
+      const a = [], s = p.START ?? 4000, e = p.END ?? 12000, st = p.STEP ?? 1000;
+      for (let v = s; v <= e + 1e-9; v += st) a.push(v);
+      return slipTest(p, a, "AXIS_SLIP_SWEEP");
+    }
+    case "PAUSE": if (!requestPause()) err("Print already paused"); return null;
+    case "RESUME": if (job !== "paused") { err("Print is not paused, resume aborted"); return null; } return resumePrint();
+    case "CANCEL_PRINT":
+      if (job === "printing") { pauseWanted = null; pausePrint(); }
+      if (job === "paused") { for (const ph of [saved.phase, ...saved.queue]) ph.line && trails.remove(ph.line); saved = null; job = "stopped"; say("Print cancelled"); }
+      else err("No print to cancel");
+      return null;
+    case "START_PRINT": case "SDCARD_PRINT_FILE": restart(0); return null;
+    case "M104": case "M109": case "M140": case "M190": case "M106": case "M107": say("Heaters and fans are not part of this simulation"); return null;
+    default: err('Unknown command:"' + cmd + '"'); return null;
+  }
+}
 function runCommand(line) {
   if (!line.trim()) return;
   log(line.trim(), "u");
   const { cmd, p, words } = parse(line);
   if (MOTION.has(cmd) && job === "printing") requestPause("Print paused so the console can drive the printer. Send RESUME to continue.");
-  let phases = null;
-  switch (cmd) {
-    case "HELP": HELP.forEach((h) => say(h)); break;
-    case "G28": phases = home(words.map((w) => w.toUpperCase()).filter((w) => "XYZ".includes(w))); break;
-    case "G0": case "G1": phases = g1(p); break;
-    case "G90": phases = [instant(() => (absolute = true))]; break;
-    case "G91": phases = [instant(() => (absolute = false))]; break;
-    case "G4": phases = [dwell((p.P || 0) / 1000)]; break;
-    case "M400": break;
-    case "M114": phases = [instant(() => log("X:" + n3(phys(sx[active])) + " Y:" + n3(ny) + " Z:" + n3(zAbs()) + " E:0.000"))]; break;
-    case "T0": case "T1": case "T2": case "T3": phases = toolMacro(Number(cmd[1])); break;
-    case "QUADRO_PARALLEL_MOVE": phases = parallelCommand(p); break;
-    case "SET_DUAL_CARRIAGE": {
-      const j = Number(String(p.CARRIAGE || "").replace("carriage_t", ""));
-      if (!(j >= 0 && j <= 3)) err("Unknown carriage"); else phases = [instant(() => activate(j))];
-      break;
-    }
-    case "SET_VELOCITY_LIMIT":
-      if (p.VELOCITY) velNow = Math.min(p.VELOCITY, 1e4); if (p.ACCEL) accelNow = p.ACCEL;
-      say("max_velocity: " + n3(velNow) + "\nmax_accel: " + n3(accelNow)); break;
-    case "M204": if (p.S) accelNow = p.S; break;
-    case "PARK_TOOLHEAD": phases = parkToolhead(); break;
-    case "PAUSE": if (!requestPause()) err("Print already paused"); break;
-    case "RESUME": if (job !== "paused") err("Print is not paused, resume aborted"); else phases = resumePrint(); break;
-    case "CANCEL_PRINT":
-      if (job === "printing") { pauseWanted = null; pausePrint(); }
-      if (job === "paused") { for (const ph of [saved.phase, ...saved.queue]) ph.line && trails.remove(ph.line); saved = null; job = "stopped"; say("Print cancelled"); }
-      else err("No print to cancel");
-      break;
-    case "START_PRINT": case "SDCARD_PRINT_FILE": restart(0); break;
-    case "M104": case "M109": case "M140": case "M190": case "M106": case "M107": say("Heaters and fans are not part of this simulation"); break;
-    default: err('Unknown command:"' + cmd + '"');
-  }
+  const phases = dispatch(cmd, p, words);
   if (phases) { const group = ++groupSeq; for (const ph of phases) ph.group = group; cmdQueue.push(...phases); }
   setPlaying(true);
 }
@@ -1206,6 +1416,18 @@ cmdInput.addEventListener("keydown", (e) => {
   if (e.key === "ArrowDown") { histAt = Math.min(cmdHistory.length, histAt + 1); cmdInput.value = cmdHistory[histAt] || ""; e.preventDefault(); }
 });
 document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => runCommand(b.dataset.cmd)));
+document.querySelectorAll("[data-fill]").forEach((b) => b.addEventListener("click", () => { cmdInput.value = b.dataset.fill; cmdInput.focus(); }));
+// jog panel: what Mainsail sends for a jog button
+let jogStep = 10;
+document.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", () => {
+  jogStep = Number(b.dataset.step);
+  document.querySelectorAll("[data-step]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+}));
+document.querySelectorAll("[data-jog]").forEach((b) => b.addEventListener("click", () => {
+  const axis = b.dataset.jog[0], sign = b.dataset.jog[1] === "-" ? -1 : 1;
+  runCommand("G91"); runCommand("G1 " + axis + (sign * jogStep) + " F" + (axis === "Z" ? 1500 : 6000)); runCommand("G90");
+}));
+
 
 // ---------- loop ----------
 let last = 0, frame = 0;
