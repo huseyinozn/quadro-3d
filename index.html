@@ -153,35 +153,45 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         <h2>Tools</h2>
         <div class="body"><table><thead><tr><th>Tool</th><th>Carriage X</th><th>State</th></tr></thead><tbody id="tools"></tbody></table></div>
       </section>
-      <section class="card wide">
+      <section class="card">
+        <h2>Temperatures <small>simulated heaters</small></h2>
+        <div class="body"><table><thead><tr><th>Heater</th><th>Power</th><th>Actual</th><th>Target</th></tr></thead><tbody id="temps"></tbody></table></div>
+      </section>
+      <section class="card">
         <h2>Last toolchange <small id="tc-time">—</small></h2>
         <div class="body"><table><thead><tr><th>Axis</th><th>From → to</th><th>Peak</th><th>Start</th></tr></thead><tbody id="tc"></tbody></table></div>
       </section>
       <section class="card wide">
-        <h2>Console <small>try G28, T2, G1 X150 Y100 F6000, M114 or HELP</small></h2>
+        <h2>Console <small>the printer's Klipper config and macros · HELP lists every command</small></h2>
         <div class="macros"><button data-cmd="G28">G28</button><button data-cmd="T0">T0</button><button data-cmd="T1">T1</button><button data-cmd="T2">T2</button><button data-cmd="T3">T3</button><button data-cmd="PAUSE">PAUSE</button><button data-cmd="RESUME">RESUME</button><button data-cmd="M114">M114</button><button data-cmd="HELP">HELP</button></div>
         <div class="examples"><span>Examples (tap to edit, then Send)</span>
+          <button data-fill="T1 X=250 Y=150">T1 X=250 Y=150</button>
           <button data-fill="QUADRO_PARALLEL_MOVE T0=40 T1=110 T2=180 T3=250 Y=150 SPEED=350">QUADRO_PARALLEL_MOVE</button>
           <button data-fill="QUADRO_PARALLEL_MOVE T0=-169 T1=-112.75 T2=-56.5 T3=150 Y=150 SPEED=350 ARRIVING=T3">… ARRIVING=T3</button>
           <button data-fill="BED_PIN_CALIBRATE_TOOL TOOL=T2 CYCLES=1">BED_PIN_CALIBRATE_TOOL</button>
           <button data-fill="BED_PIN_CALIBRATE_ALL">BED_PIN_CALIBRATE_ALL</button>
           <button data-fill="QUADRO_CUSTOM_BED_MESH REPEATS=1">QUADRO_CUSTOM_BED_MESH</button>
           <button data-fill="AXIS_SLIP_TEST AXIS=Y TOOL=T0 ACCEL=7000 VELOCITY=300">AXIS_SLIP_TEST</button>
+          <button data-fill="M109 T2 S240">M109 T2 S240</button>
+          <button data-fill="G1 X100 Y100 E20 F3000">G1 … E20</button>
+          <button data-fill="CANCEL_PRINT">CANCEL_PRINT</button>
         </div>
         <pre class="console" id="console" aria-live="off"></pre>
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
       </section>
     </div>
-    <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower.</p>
+    <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower. The console runs the printer's own Klipper configuration, its macros and its toolchange, homing and calibration modules, right in the browser: anything typed there behaves as it would on the machine. Heaters and the bed surface are simulated (the bed follows the printer's saved mesh); load cell forces and accelerometer readings are not.</p>
   </div>
 </div>
 
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "quadro/klipper": "./klipper.js", "quadro/jinja": "./jinja.js"}}</script>
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { createPrinter } from "quadro/klipper";
+const CONFIG_URL = "printer-config.json";
 
 // ---------- machine facts measured from the CAD export (mm, world: x across, y up, z front(-)/back(+)) ----------
 // The current export sits at (-0.56, +37.01, +364) mm from this frame; the CAD pipeline shifts it back (pack.mjs OFFSET).
@@ -331,7 +341,7 @@ let center = new THREE.Vector3(), radius = 1;
 const trails = new THREE.Group();
 bedGroup.add(trails);
 
-const plugs = [], caps = [];
+const plugs = [], caps = [], headLeds = [];
 // move an object by a world-space offset (mm), whatever its parent's frame
 function nudge(obj, dx, dy, dz) {
   obj.updateWorldMatrix(true, false);
@@ -547,6 +557,7 @@ loadModel().then((gltf) => {
     g.attach(head);
     const hb = new THREE.Box3().setFromObject(head);
     const led = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.003, 0.0008), new THREE.MeshBasicMaterial({ color: COLORS[j] }));
+    headLeds[j] = led;
     led.position.set((hb.min.x + hb.max.x) / 2, hb.max.y - 0.032, hb.min.z - 0.0005);
     g.add(led);
     head.traverse((o) => { if (!plugs[j] && /kablo/i.test(o.name)) plugs[j] = o; });
@@ -900,14 +911,14 @@ function nextJob() {
 function startPhase(p) { phase = p; phase.t = 0; phase.T = 0; phase.run ||= () => {}; phase.begin?.(); }
 // console commands go first; otherwise the print carries on, or the printer waits for the next command
 function advance() {
-  if (pauseWanted && job === "printing" && queue[0]?.kind !== "change") { const { note } = pauseWanted; pauseWanted = null; pausePrint(note, true); }
-  if (cmdQueue.length && !pauseWanted) return startPhase(cmdQueue.shift());
+  if (handover && job === "printing" && queue[0]?.kind !== "change") takeOver(true);
+  if (cmdQueue.length && !handover) return startPhase(cmdQueue.shift());
   if (job === "printing") return startPhase(queue.shift() || { kind: "idle" });
   startPhase({ kind: job === "done" ? "done" : "ready" });
 }
 function step(dt) {
   while (dt > 1e-9) {
-    if (phase.kind === "idle" && job === "printing" && (!cmdQueue.length || pauseWanted)) { if (queue.length) advance(); else nextJob(); }
+    if (phase.kind === "idle" && job === "printing" && (!cmdQueue.length || handover)) { if (queue.length) advance(); else nextJob(); }
     else if (["idle", "ready", "done"].includes(phase.kind)) { if (!cmdQueue.length) { simClock += dt; return; } advance(); }
     if (phase.kind === "done" && !cmdQueue.length) return;
     const use = Math.min(dt, phase.T - phase.t);
@@ -958,16 +969,19 @@ function growBlocks() {
   }
   dirty = true;
 }
-function restart(toLayer = 0) {
+function restart(toLayer = 0, quiet = false) {
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
-  phase.end = null; queue = []; cmdQueue = []; saved = null; pauseWanted = null;
-  job = "printing"; absolute = true; velNow = LIMITS.v; accelNow = LIMITS.a;
+  phase.end = null; queue = []; cmdQueue = []; saved = null; handover = null; pendingLines = [];
+  job = "printing";
+  if (K) K.abort();
+  if (K) { if (K.isShutdown()) K.run("FIRMWARE_RESTART"); K.setHeaters({ extruder: 220, extruder1: 220, extruder2: 220, extruder3: 220, heater_bed: 60 }); }
   // place the heads as the printer would have them: the active tool over the part, the others parked either side
   active = fillTower(toLayer); setActive(active);
   sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
   if (active >= 0) ny = CUBE_Y0;
-  layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle" };
-  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); consoleEl.textContent = ""; log("START_PRINT", "c"); }
+  layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle", t: 0, T: 0, run() {} };
+  for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
+  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); if (!quiet) log("SDCARD_PRINT_FILE FILENAME=alignment_test_cube.gcode", "c"); }
   else log("; skipped to layer " + (toLayer + 1), "c");
   lastPos = null; vel = 0;
   growBlocks(); draw(); run();
@@ -1007,6 +1021,7 @@ function report() {
     return '<tr class="' + (j === active ? "on" : "") + '"><td><i style="background:' + COLORS[j] + '"></i>T' + j + "</td><td>" + fmt(phys(x), 2) + "</td><td>" + where + "</td></tr>";
   }).join("");
   if (toolsEl.innerHTML !== html) toolsEl.innerHTML = html;
+  reportTemps();
 }
 // toolhead velocity, as the web UI shows it: the active nozzle's speed over the bed
 function sampleVelocity(dt) {
@@ -1016,406 +1031,161 @@ function sampleVelocity(dt) {
   lastPos = p;
 }
 
-// ---------- console: type G-code and the printer's macros, as on the real machine ----------
-// The behaviour follows the printer's config: homing_override + _HOME_X/_HOME_Y/_HOME_Z, PAUSE/RESUME/PARK_TOOLHEAD,
-// the T0..T3 macros (cp_macro.cfg, tool_map.cfg) and QUADRO_PARALLEL_MOVE (quadro_parallel_carriage.py).
-const X_LIMITS = [[-169, 303.25], [-112.75, 359.5], [-59.5, 412.75], [-3.25, 469]], Y_LIMITS = [-1, 318], Z_LIMITS = [-5, 310];
-const X_HOME = [-169, -112.75, 412.75, 469], CLEARANCE = 56.25;
-let groupSeq = 0, job = "printing", cmdQueue = [], saved = null, absolute = true, feed = 300, velNow = LIMITS.v, accelNow = LIMITS.a, simClock = 0;
+// ---------- console: the printer's own Klipper config, run by klipper.js ----------
+// Everything typed goes to a model of the printer's Klipper host (printer-config.json is the printer's config:
+// its macros, homing_override and modules). Moves come back as timed items and are animated here.
+let job = "printing", cmdQueue = [], saved = null, simClock = 0, K = null, pendingLines = [], handover = null;
 const zAbs = () => zNow() + hop;
-const n3 = (v) => v.toFixed(3);
-const err = (text) => log("!! " + text, "e"), say = (text) => log("// " + text, "r");
-const instant = (fn) => ({ kind: "manual", label: "Busy", begin() { fn(); } });
-// a failed check drops the rest of that command, as Klipper does when a macro raises an error
-const abort = (ph) => { cmdQueue = cmdQueue.filter((q) => q.group !== ph.group); };
-const check = (fn) => ({ kind: "manual", label: "Busy", begin() { const e = fn(); if (e) { err(e); abort(this); } } });
-const dwell = (s, label = "Busy") => ({ kind: "manual", label, begin() { this.T = s; } });
-// One Klipper move: every listed axis on a single trapezoid along the move vector (G1, homing moves, manual_move).
-// For several X carriages the longest carriage travel is the primary; the others follow scaled (COPY/MIRROR).
-function lineMove(label, targets, speed, accel = () => accelNow) {
-  return { kind: "manual", label, begin() {
-      this.p = null;
-      const t = targets(); if (!t) { this.T = 0; abort(this); return; }
-      this.x0 = sx.slice(); this.y0 = ny; this.z0 = zAbs();
-      this.x1 = t.x || this.x0; this.y1 = t.y ?? ny; this.z1 = t.z ?? this.z0;
-      const dx = Math.max(...this.x1.map((x, j) => Math.abs(x - this.x0[j]))), dy = this.y1 - this.y0, dz = this.z1 - this.z0;
-      const L = Math.hypot(dx, dy, dz);
-      let v = Math.min(typeof speed === "function" ? speed() : speed, velNow), a = typeof accel === "function" ? accel() : accel;
-      if (Math.abs(dz) > 1e-9) { v = Math.min(v, LIMITS.vz * L / Math.abs(dz)); a = Math.min(a, LIMITS.az * L / Math.abs(dz)); }
-      this.L = L; this.p = profile(0, L, v, a); this.T = this.p.T;
-    },
-    run(t) {
-      if (!this.p) return;
-      const f = this.L ? posAt(this.p, t) / this.L : 1;
-      sx = this.x0.map((x, j) => x + (this.x1[j] - x) * f); ny = this.y0 + (this.y1 - this.y0) * f; hop = this.z0 + (this.z1 - this.z0) * f - zNow();
-    } };
+const poseNow = () => ({ x: sx.map(phys), y: ny, z: zAbs() });
+function applyPose(p) { sx = p.x.map((x) => PRINT_SX0 + x); ny = p.y; hop = p.z - zNow(); }
+// filament laid down by console moves (purge lines, test prints)
+const manualTrails = new THREE.Group();
+bedGroup.add(manualTrails);
+function extrudeTo(state, tool, p) {
+  const v = new THREE.Vector3(-(PRINT_SX0 + p.x[tool]) / 1000, (PEI_TOP + Math.max(p.z, 0.1)) / 1000, (PRINT_Z0 + p.y) / 1000);
+  if (!state.line || state.tool !== tool || state.n >= 4000) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 4001), 3));
+    state.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: COLORS[tool] })); state.n = 0; state.tool = tool;
+    manualTrails.add(state.line);
+    while (manualTrails.children.length > 300) { const old = manualTrails.children[0]; manualTrails.remove(old); old.geometry.dispose(); }
+    if (state.last) { state.line.geometry.attributes.position.setXYZ(state.n++, state.last.x, state.last.y, state.last.z); }
+  }
+  const pos = state.line.geometry.attributes.position;
+  pos.setXYZ(state.n++, v.x, v.y, v.z); pos.needsUpdate = true; state.line.geometry.setDrawRange(0, state.n); state.last = v; dirty = true;
 }
-const moveCarriage = (j, x, speed, label) => lineMove(label, () => ({ x: sx.map((v, k) => (k === j ? PRINT_SX0 + x : v)) }), speed);
-const moveZ = (dz, speed, label) => lineMove(label, () => ({ z: zAbs() + dz }), speed);
-function activate(j) { active = j; setActive(j); }
-// where the active carriage may go without passing its neighbours (min_clearance) or leaving its rail
-function xRange(j, xs = sx.map(phys)) {
-  return [Math.max(X_LIMITS[j][0], j > 0 ? xs[j - 1] + CLEARANCE : -Infinity), Math.min(X_LIMITS[j][1], j < 3 ? xs[j + 1] - CLEARANCE : Infinity)];
+// one timed item from klipper.js -> one animation phase
+function toPhase(it) {
+  const label = it.label || "Busy";
+  switch (it.kind) {
+    case "call": return { kind: "manual", label, begin() { it.start(); } };
+    case "dwell": return { kind: "manual", label, begin() { this.T = it.T; } };
+    case "until": return { kind: "manual", label, begin() { this.T = 1e9; }, run(t) { if (it.until()) this.T = t; }, end() { it.done && it.done(); } };
+    case "resume": return { kind: "manual", label: "Resuming", begin() { resumeHandback(); } };
+    default: return { kind: "manual", label, begin() { this.T = it.T; this.ex = {}; },
+      run(t) {
+        const r = it.at(t); applyPose(r.pose);
+        if (r.seg && r.seg.extrude) { if (!this.ex.on) { this.ex.last = null; this.ex.line = null; } this.ex.on = true; extrudeTo(this.ex, r.seg.extrude.tool, r.pose); } else this.ex.on = false;
+      } };
+  }
 }
-
-function homeX() {
-  const order = [0, 1, 3, 2], slow = [], fast = [];
-  for (const j of order) fast.push(moveCarriage(j, X_HOME[j], 60, "Homing X"));
-  for (const j of order) slow.push(moveCarriage(j, X_HOME[j], 20, "Homing X"));
-  return [instant(() => { velNow = 500; accelNow = 5000; }), ...fast,
-    moveCarriage(2, 372, 100, "Homing X"), moveCarriage(3, 449, 100, "Homing X"), moveCarriage(1, -72, 100, "Homing X"), moveCarriage(0, -149, 100, "Homing X"),
-    dwell(2, "Homing X"), ...slow,
-    // QUADRO_DISTRIBUTE_X: QUADRO_PARALLEL_MOVE T0=150 T1=356.50 SPEED=300
-    lineMove("Homing X", () => ({ x: [PRINT_SX0 + 150, PRINT_SX0 + 356.5, sx[2], sx[3]] }), 300), instant(() => activate(0))];
+// the head LED strips follow neopixel / coprint_leds commands, otherwise they show the tool colour
+const ledColor = [null, null, null, null];
+function paintLeds() { headLeds.forEach((m, j) => { if (m) m.material.color.setRGB(...(ledColor[j] ? ledColor[j].slice(0, 3).map((v, i) => Math.min(1, v + (ledColor[j][3] || 0))) : new THREE.Color(COLORS[j]).toArray())); }); dirty = true; }
+function showPlan(p) {
+  const row = (name, q, j, d = 0) => "<tr><td>" + (j >= 0 ? '<i style="background:' + COLORS[j] + '"></i>' : "") + name + "</td><td>" + (q.T ? fmt(q.start, d) + " → " + fmt(q.target, d) : "holds") + "</td><td>" + (q.T ? fmt(q.peak) + " mm/s" : "—") + "</td><td>" + (q.T ? (q.delay > 0.001 ? "+" + fmt(q.delay, 2) + " s" : "0 s") : "—") + "</td></tr>";
+  tcEl.innerHTML = p.ps.map((q, j) => row("T" + j, q, j)).join("") + row("Y bed", p.py, -1) + (p.pz.T ? row("Z", p.pz, -1, 1) : "");
+  tcTimeEl.textContent = "QUADRO_PARALLEL_MOVE → T" + p.arriving + " · " + fmt(p.T, 2) + " s";
 }
-function homeY() {
-  return [dwell(1, "Homing Y"), lineMove("Homing Y", () => ({ y: Y_LIMITS[0] }), 60), lineMove("Homing Y", () => ({ y: 9 }), 20),
-    dwell(2, "Homing Y"), lineMove("Homing Y", () => ({ y: Y_LIMITS[0] }), 20), lineMove("Homing Y", () => ({ y: 9 }), 20)];
+const host = {
+  respond(text, kind) { for (const line of String(text).split("\n")) log(line, kind === "error" || line.startsWith("!!") ? "e" : line.startsWith("//") ? "r" : ""); },
+  enqueue(item) { cmdQueue.push(toPhase(item)); },
+  pose: poseNow,
+  activate(j) { if (job === "printing") return; active = j; setActive(j); },
+  setLed(j, c) { ledColor[j] = c; paintLeds(); },
+  meshDot: (x, y) => markPoint(x, y),
+  clearMeshDots: () => { meshDots.clear(); dirty = true; },
+  halt() { cmdQueue = []; if (job === "printing" || job === "paused") stopPrint("stopped"); phase = { kind: "ready", t: 0, T: 0, run() {} }; },
+  velocity: () => vel,
+  lastPlan: showPlan,
+  print: {
+    state: () => (job === "printing" || job === "paused" ? "printing" : job === "done" ? "complete" : job === "stopped" ? "cancelled" : "standby"),
+    filename: () => (job === "stopped" && !saved ? "" : "alignment_test_cube.gcode"), duration: () => stats.time, progress: () => Math.min(1, (layer + jobAt / 4) / LAYERS), layers: () => [layer + 1, LAYERS],
+    start: () => { restart(0, true); setPlaying(true); }, cancel: () => stopPrint("stopped"),
+  },
+};
+function stopPrint(kind) {
+  if (saved) for (const ph of [saved.phase, ...saved.queue]) if (ph.line) { trails.remove(ph.line); ph.line.geometry.dispose(); }
+  if (phase.line && job === "printing") { trails.remove(phase.line); phase.line.geometry.dispose(); }
+  job = kind; saved = null; queue = []; handover = null; pendingLines = [];
 }
-function homeZ() {
-  const toCentre = lineMove("Homing Z", () => {
-    if (xRange(0)[1] < 150) { err("Move out of range: 150.000 150.000 " + n3(zAbs()) + " [0.000]"); return null; }
-    return { x: sx.map((v, k) => (k === 0 ? PRINT_SX0 + 150 : v)), y: 150 };
-  }, 100);
-  return [instant(() => activate(0)), toCentre, dwell(1, "Probing"),
-    lineMove("Probing", () => ({ z: 0 }), 5), moveZ(2, 5, "Probing"), lineMove("Probing", () => ({ z: 0 }), 5), moveZ(10, 5, "Probing")];
+// commands that only read or set state run straight away, even during the print; anything else first pauses
+// the print at a safe point (never inside a toolchange), as the PAUSE macro would, and then runs
+const PASSIVE = new Set(["M105", "M114", "M115", "GET_POSITION", "STATUS", "HELP", "QUERY_ENDSTOPS", "QUERY_PROBE", "M117", "M118", "RESPOND", "SET_GCODE_VARIABLE",
+  "BED_MESH_OUTPUT", "BED_MESH_MAP", "M104", "M140", "M106", "M107", "SET_FAN_SPEED", "SET_HEATER_TEMPERATURE", "TURN_OFF_HEATERS", "SET_LED", "TH_SET_FILAMENT", "TH_CLEAR_FILAMENT",
+  "TH_LOADING_START", "TH_LOADING_END", "SET_PRESSURE_ADVANCE", "SET_VELOCITY_LIMIT", "M204", "M220", "M221", "SET_INPUT_SHAPER", "DUMP_TMC", "SET_TMC_FIELD", "SET_TMC_CURRENT", "SAVE_VARIABLE",
+  "SAVE_CONFIG", "M112", "FIRMWARE_RESTART", "RESTART", "M27", "M20", "SET_DISPLAY_TEXT", "M73", "UPDATE_DELAYED_GCODE", "SET_IDLE_TIMEOUT", "ACCELEROMETER_QUERY", "LOAD_CELL_READ",
+  "BED_MESH_CLEAR", "BED_MESH_PROFILE", "SET_PIN", "SDCARD_PRINT_FILE", "M24", "M23", "EXCLUDE_OBJECT", "TEMPERATURE_WAIT", "LOAD_CELL_DIAGNOSTIC", "MEASURE_AXES_NOISE", "T_ALL_TEMP", "T_ALL_FAN"]);
+function submit(line) {
+  if (!line.trim()) return;
+  log(line.trim(), "u");
+  setPlaying(true);
+  if (!K) { log("!! Printer is not ready", "e"); return; }
+  const cmd = line.trim().split(/\s+/)[0].toUpperCase();
+  if (pendingLines.length) { pendingLines.push(line); return; }
+  if (job === "printing" && !PASSIVE.has(cmd)) {
+    pendingLines.push(line);
+    handover = { cmd };
+    if (phase.kind !== "change" && queue[0]?.kind !== "change") takeOver(false);
+    return;
+  }
+  if (job === "printing") K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
+  K.run(line);
 }
-function home(axes) {
-  const all = !axes.length;
-  return [moveZ(5, 5, "Homing"), ...(all || axes.includes("X") ? homeX() : []), ...(all || axes.includes("Y") ? homeY() : []),
-    ...(all || axes.includes("Z") ? homeZ() : []),
-    instant(() => { activate(0); log("echo: Home finished: reset active tool to T0"); })];
-}
-// T0..T3 typed on the console carry no X/Y: the macro parks the tools that are in the way, lifts Z 0.4 + 3 mm and makes Tn primary
-function toolMacro(next) {
-  if (next === active) return [instant(() => log("echo: Already on T" + next))];
-  let prevAccel, z0;
-  return [instant(() => { prevAccel = accelNow; accelNow = 7000; z0 = zAbs(); }), moveZ(TC.hopPre, 30, "Toolchange"),
-    lineMove("Toolchange", () => ({ x: sx.map((x, j) => (j < next ? LP[j] : j > next ? RP[j - 1] : x)), z: z0 + TC.hop }), TC.speed),
-    instant(() => { accelNow = prevAccel; activate(next); if (job === "printing") stats.changes++; })];
-}
-function parkToolhead() {
-  return [moveZ(2, 15, "Parking"), lineMove("Parking", () => {
-    const x = X_HOME[active], [lo, hi] = xRange(active);
-    if (x < lo - 1e-6 || x > hi + 1e-6) { err("Move out of range: " + n3(x) + " 148.000 " + n3(zAbs()) + " [0.000]"); return null; }
-    return { x: sx.map((v, k) => (k === active ? PRINT_SX0 + x : v)), y: 148 };
-  }, 100)];
-}
-// PAUSE waits for a running toolchange macro to finish, as Klipper finishes the current command first
-let pauseWanted = null;
-function requestPause(note) {
-  if (job !== "printing" || pauseWanted) return false;
-  if (phase.kind === "change") { pauseWanted = { note }; return true; }
-  return pausePrint(note);
-}
-function pausePrint(note, atBoundary) {
-  if (job !== "printing") return false;
+// the print stops at a safe point and the console takes the machine over
+function takeOver(atBoundary) {
+  const h = handover; handover = null;
   saved = { phase: atBoundary ? { kind: "idle" } : phase, queue, sx: sx.slice(), ny, hop, active };
   job = "paused"; queue = []; phase = { kind: "ready", t: 0, T: 0, run() {} };
-  if (note) say(note);
-  cmdQueue.unshift(...parkToolhead());
-  return true;
+  K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
+  if (h.cmd !== "CANCEL_PRINT" && h.cmd !== "PAUSE") { log("// Print paused so the console can drive the printer. Send RESUME to continue.", "r"); K.run("PAUSE"); }
+  const lines = pendingLines; pendingLines = [];
+  for (const l of lines) K.run(l);
 }
-function resumePrint() {
+// RESUME_BASE moved the active tool back; the other carriages, the bed and Z follow, then the print carries on
+function resumeHandback() {
   const s = saved;
-  return [...(active !== s.active ? toolMacro(s.active) : []),
-    // RESUME_BASE: back to where the print stopped, every carriage, the bed and Z, then carry on
-    lineMove("Resuming", () => ({ x: s.sx, y: s.ny, z: zNow() + s.hop }), 50),
-    { kind: "manual", label: "Resuming", begin() { job = "printing"; queue = s.queue; saved = null; this.resumeTo = s.phase; } }];
-}
-// QUADRO_PARALLEL_MOVE as the module runs it: limits and clearance checked at start and target, then
-// ARRIVING -> method B (independent trapezoids, arriving tool delayed), otherwise one scaled manual_move
-function parallelCommand(p) {
-  const names = ["carriage_t0", "carriage_t1", "carriage_t2", "carriage_t3"], gap = p.MIN_CLEARANCE ?? CLEARANCE;
-  if (![0, 1, 2, 3].some((j) => p["T" + j] !== undefined) && p.Y === undefined && p.Z === undefined) return err("Specify T0/T1/T2/T3 and/or Y/Z target");
-  const arriving = p.ARRIVING === undefined ? -1 : Number(String(p.ARRIVING).replace(/^T/i, ""));
-  if (p.ARRIVING !== undefined && !(arriving >= 0 && arriving <= 3)) return err("ARRIVING must be T0, T1, T2 or T3");
-  let to;
-  // limits and clearance are checked when the command runs, against where the carriages are then
-  const validate = check(() => {
-    const xs = sx.map(phys); to = xs.map((x, j) => p["T" + j] ?? x);
-    for (let j = 0; j < 4; j++) {
-      if (to[j] < X_LIMITS[j][0] - 1e-6) return names[j] + " target " + n3(to[j]) + " is below minimum " + n3(X_LIMITS[j][0]);
-      if (to[j] > X_LIMITS[j][1] + 1e-6) return names[j] + " target " + n3(to[j]) + " is above maximum " + n3(X_LIMITS[j][1]);
-    }
-    for (const [label, set] of [["START", xs], ["TARGET", to]]) for (let j = 0; j < 3; j++) if (set[j + 1] - set[j] < gap - 1e-6)
-      return label + " clearance violation: " + names[j] + "=" + n3(set[j]) + ", " + names[j + 1] + "=" + n3(set[j + 1]) + ", clearance=" + n3(set[j + 1] - set[j]) + " mm, required=" + n3(gap) + " mm";
-    if (p.Y !== undefined && (p.Y < Y_LIMITS[0] || p.Y > Y_LIMITS[1])) return "Move out of range: Y " + n3(p.Y);
-    if (p.Z !== undefined && (p.Z < Z_LIMITS[0] || p.Z > Z_LIMITS[1])) return "Move out of range: Z " + n3(p.Z);
-    if (arriving >= 0 && p["T" + arriving] === undefined) return "ARRIVING must have an explicit target";
-  });
-  const speed = () => Math.min(p.SPEED ?? 50, velNow);
-  const done = instant(() => say("QUADRO_PARALLEL_MOVE complete\n" + sx.map((x, j) => "T" + j + "=" + n3(phys(x))).join(" ") + " Y=" + n3(ny) + " Z=" + n3(zAbs())));
-  if (arriving < 0) return [validate, lineMove("Parallel move", () => ({ x: to.map((x) => PRINT_SX0 + x), y: p.Y, z: p.Z }), speed), done];
-  return [validate, { kind: "manual", label: "Parallel move", begin() {
-      const v = speed(), a = accelNow, ps = sx.map((x, j) => profile(x, PRINT_SX0 + to[j], v, a));
-      const py = profile(ny, p.Y ?? ny, v, a), pz = profile(hop, (p.Z ?? zAbs()) - zNow(), Math.min(v, LIMITS.vz), Math.min(a, LIMITS.az));
-      this.T = Math.max(py.T, pz.T, ...ps.map((q) => q.T));
-      if (ps[arriving].T) ps[arriving].delay = this.T - ps[arriving].T;
-      this.plan = { ps, py, pz };
-      say("QUADRO delayed plan: ARRIVING=T" + arriving + " delay=" + ps[arriving].delay.toFixed(6) + "s finish=" + this.T.toFixed(6) + "s speed=" + v.toFixed(3) + " accel=" + a.toFixed(3));
+  if (!s) return;
+  const restore = { kind: "manual", label: "Resuming", begin() {
+      this.a = poseNow(); this.b = { x: s.sx.map(phys), y: s.ny, z: zNow() + s.hop };
+      const L = Math.max(Math.hypot(this.b.y - this.a.y, this.b.z - this.a.z), ...this.b.x.map((x, j) => Math.abs(x - this.a.x[j])));
+      this.L = L; this.p = profile(0, L, 50, 5000); this.T = this.p.T;
     },
-    run(t) { const { ps, py, pz } = this.plan; sx = ps.map((q) => posAt(q, t)); ny = posAt(py, t); hop = posAt(pz, t); } }, done];
+    run(t) { const f = this.L ? posAt(this.p, t) / this.L : 1; applyPose({ x: this.a.x.map((x, j) => x + (this.b.x[j] - x) * f), y: this.a.y + (this.b.y - this.a.y) * f, z: this.a.z + (this.b.z - this.a.z) * f }); } };
+  const back = { kind: "manual", label: "Resuming", begin() { job = "printing"; queue = s.queue; saved = null; active = s.active; setActive(active); this.resumeTo = s.phase; } };
+  cmdQueue.unshift(restore, back);
 }
-function g1(p) {
-  return [lineMove("Moving", () => {
-    if (active < 0) { err("No active tool"); return null; }
-    if (p.F !== undefined) feed = p.F / 60;
-    const cur = [phys(sx[active]), ny, zAbs()];
-    const tgt = ["X", "Y", "Z"].map((k, i) => (p[k] === undefined ? cur[i] : absolute ? p[k] : cur[i] + p[k]));
-    const [lo, hi] = xRange(active);
-    if (tgt[0] < lo - 1e-6 || tgt[0] > hi + 1e-6 || tgt[1] < Y_LIMITS[0] || tgt[1] > Y_LIMITS[1] || tgt[2] < Z_LIMITS[0] || tgt[2] > Z_LIMITS[1]) {
-      err("Move out of range: " + tgt.map(n3).join(" ") + " [0.000]"); return null;
-    }
-    return { x: sx.map((v, k) => (k === active ? PRINT_SX0 + tgt[0] : v)), y: tgt[1], z: tgt[2] };
-  }, () => feed)];
-}
-// ---------- the printer's own calibration modules (klippy/extras) ----------
-// bed_pin_calibration.py: per-tool pin positions from bed_pin_tool_positions.json (the printer's last calibration)
-const PIN = {
-  T0: { top_x: 252.36, top_y: 305.195, top_z: 1.79 }, T1: { top_x: 252.2, top_y: 305.295, top_z: 1.73 },
-  T2: { top_x: 250.615, top_y: 305.09, top_z: 1.77 }, T3: { top_x: 250.13, top_y: 304.645, top_z: 1.82 },
-};
-const PIN_BOX = { left_x: 243, right_x: 259, front_y: 300, back_y: 311, side_z_margin: 1 };
-const PIN_R = 3;                          // pin radius + nozzle tip radius: where a side touch registers (not in the config; a stand-in)
-const OFFSETS_PATH = "/home/cp/printer_data/config/bed_pin_offsets.json";
-// the calibration pin at the back of the bed, drawn where the config says it is
-const pinMesh = new THREE.Mesh(new THREE.CylinderGeometry((PIN_R - 0.5) / 1000, (PIN_R - 0.5) / 1000, PIN.T0.top_z / 1000, 24), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 0.8, roughness: 0.3 }));
-pinMesh.position.set(-(PRINT_SX0 + PIN.T0.top_x) / 1000, (PEI_TOP + PIN.T0.top_z / 2) / 1000, (PRINT_Z0 + PIN.T0.top_y) / 1000);
-bedGroup.add(pinMesh);
-let pinResults = {};
-const f5 = (v) => v.toFixed(5);
-// coarse 0.2 mm steps until the load cell trips, back off 1 mm, then 0.01 mm steps: shown as a quick then a slow approach
-function touch(label, axis, dir, contact) {
-  const k = "xyz".indexOf(axis), at = () => [phys(sx[active]), ny, zAbs()];
-  const goto = (v, speed) => lineMove(label, () => {
-    const p = at(); p[k] = v;
-    return { x: sx.map((x, j) => (j === active ? PRINT_SX0 + p[0] : x)), y: p[1], z: p[2] };
-  }, speed);
-  return [dwell(0.2, label), goto(contact, axis === "z" ? 2 : 3), goto(contact - dir, axis === "z" ? 5 : 20), dwell(0.45, label), goto(contact, 0.4)];
-}
-const zTo = (z, speed, label) => lineMove(label, () => ({ z }), speed);
-const xyTo = (x, y, speed, label) => lineMove(label, () => ({ x: sx.map((v, j) => (j === active ? PRINT_SX0 + x : v)), y }), speed);
-// _prepare_tool_at: Z 5, park the other carriages (right side first, then left), the tool goes over the pin
-function prepareTool(j, x, y, label) {
-  const others = [3, 2, 1, 0].filter((k) => k > j).concat([0, 1, 2].filter((k) => k < j));
-  return [zTo(5, 5, label), ...others.map((k) => moveCarriage(k, k < j ? X_PARK_L[k] : X_PARK_R[k - 1], 50, label)),
-    instant(() => activate(j)), xyTo(x, y, 50, label), zTo(5, 2, label)];
-}
-function pinCycle(j, cycle, total, label, full = true) {
-  const t = "T" + j, pin = PIN[t], sideZ = pin.top_z - PIN_BOX.side_z_margin;
-  const side = (x, y) => [zTo(5, 5, label), xyTo(x, y, 50, label), zTo(sideZ, 2, label)];
-  return [...(full ? prepareTool(j, pin.top_x, pin.top_y, label) : [xyTo(pin.top_x, pin.top_y, 50, label), zTo(5, 2, label)]),
-    ...touch(label, "z", -1, pin.top_z), zTo(5, 5, label),
-    ...side(PIN_BOX.left_x, pin.top_y), ...touch(label, "x", 1, pin.top_x - PIN_R),
-    ...side(PIN_BOX.right_x, pin.top_y), ...touch(label, "x", -1, pin.top_x + PIN_R),
-    ...side(pin.top_x, PIN_BOX.front_y), ...touch(label, "y", 1, pin.top_y - PIN_R),
-    ...side(pin.top_x, PIN_BOX.back_y), ...touch(label, "y", -1, pin.top_y + PIN_R), zTo(5, 5, label),
-    instant(() => {
-      pinResults[t] = { x: pin.top_x, y: pin.top_y, z: pin.top_z };
-      say("BED_PIN_CALIBRATE_TOOL " + t + " cycle " + (cycle + 1) + "/" + total + ": Z=" + f5(pin.top_z) + " X_LEFT=" + f5(pin.top_x - PIN_R) + " X_RIGHT=" + f5(pin.top_x + PIN_R) +
-        " Y_BACK=" + f5(pin.top_y + PIN_R) + " Y_FRONT=" + f5(pin.top_y - PIN_R) + " CENTER_X=" + f5(pin.top_x) + " CENTER_Y=" + f5(pin.top_y));
-    })];
-}
-function pinCalibrateTool(p) {
-  const t = String(p.TOOL ?? "T0").toUpperCase().replace(/^(\d)$/, "T$1"), j = Number(t.slice(1));
-  if (!PIN[t]) return err("Unknown TOOL=" + t);
-  const label = "Bed pin " + t, cycles = p.CYCLES === 1 ? 1 : p.FIRST === 1 ? 3 : 2, out = p.RESET === 0 ? [] : home([]);
-  for (let i = 0; i < cycles; i++) out.push(...pinCycle(j, i, cycles, label, i === 0));
-  if (cycles > 1) out.push(instant(() => {
-    const r = pinResults[t];
-    say("BED_PIN_CALIBRATE_TOOL " + t + " COMPARE: A CENTER_X=" + f5(r.x) + " CENTER_Y=" + f5(r.y) + " Z=" + f5(r.z) + " B CENTER_X=" + f5(r.x) + " CENTER_Y=" + f5(r.y) + " Z=" + f5(r.z) + " DELTA_X=0.00000 DELTA_Y=0.00000 DELTA_Z=0.00000 PASS");
-  }));
-  return out;
-}
-const offsetsVsT0 = () => ["T0", "T1", "T2", "T3"].map((t) => [t, pinResults[t].x - pinResults.T0.x, pinResults[t].y - pinResults.T0.y, pinResults[t].z - pinResults.T0.z]);
-function pinCalibrateAll() {
-  const out = [instant(() => (pinResults = {})), ...home([])];
-  for (let j = 0; j < 4; j++) out.push(...pinCycle(j, 0, 1, "Bed pin T" + j));
-  out.push(instant(() => say("BED_PIN_CALIBRATE_ALL OFFSETS vs T0: " + offsetsVsT0().map(([t, x, y, z]) => t + " X=" + f5(x) + " Y=" + f5(y) + " Z=" + f5(z)).join(" "))));
-  return out;
+function startKlipper(config) {
+  K = createPrinter(config, host);
+  K.setHeaters({ extruder: 220, extruder1: 220, extruder2: 220, extruder3: 220, heater_bed: 60 });
 }
 
-// axis_slip_test.py: touch the pin, run a burst at the requested accel/velocity, touch again, compare
-function burstScript(axis, accel, velocity, lo, hi, repeat) {
-  const mid = (lo + hi) / 2, fast = Math.round(velocity * 60), lead = 20, short = 20, hopD = 40, L = [];
-  const g = (v, f) => L.push("G1 " + axis + v.toFixed(3) + " F" + f), limit = (a, v) => L.push("SET_VELOCITY_LIMIT" + (v !== undefined ? " VELOCITY=" + v : "") + (a !== undefined ? " ACCEL=" + a : ""));
-  L.push("G90"); limit(2000, 100); L.push("G1 Z10.000 F600");
-  if (axis === "X") L.push("G1 Y150.000 F6000");
-  g(mid, 3000);
-  for (let r = 0; r < repeat; r++) {
-    limit(accel, velocity);
-    for (const t of [hi, lo, hi, lo, mid]) { L.push("G4 P500"); g(t, fast); }
-    g(mid - lead, 1800); g(lo, fast);
-    for (let i = 0; i < 2; i++) { g(lo + lead, 1800); g(hi, fast); g(hi - lead, 1800); g(lo, fast); }
-    g(lo + lead, 1800); g(hi, fast);
-    for (let i = 0; i < 2; i++) { limit(1000); g(hi - lead, 3000); limit(accel); g(lo, fast); limit(1000); g(lo + lead, 3000); limit(accel); g(hi, fast); }
-    for (let i = 0; i < 10; i++) { g(mid - short, fast); g(mid + short, fast); }
-    g(mid, 1800);
-    for (const t of [lo, lo + hopD, lo, hi, hi - hopD, hi, lo, lo + hopD, lo, hi]) g(t, fast);
-    g(hi - lead, 1800); g(lo, fast);
-  }
-  limit(2000, 100); g(mid, 3000);
-  return L;
-}
-function slipTest(p, accels, name) {
-  const axis = String(p.AXIS ?? "Y").toUpperCase(), t = String(p.TOOL ?? "T0").toUpperCase().replace(/^(\d)$/, "T$1");
-  if (axis !== "X" && axis !== "Y") return err("AXIS must be X or Y");
-  if (!PIN[t]) return err("Unknown TOOL=" + t);
-  if (job === "printing" || job === "paused") return err("Run this test only while the printer is idle");
-  const j = Number(t[1]), velocity = p.VELOCITY ?? 300, repeat = p.REPEAT ?? 1, probeOnly = p.PROBE_ONLY === 1, tol = p.TOLERANCE ?? 0.15;
-  const lo = p.MIN ?? 50, hi = p.MAX ?? 250, pin = PIN[t], sideZ = pin.top_z - PIN_BOX.side_z_margin, tag = name + " " + axis + " " + t, label = "Axis slip test";
-  if (hi - lo < 100) return err("MAX - MIN must be at least 100 mm");
-  const contact = axis === "X" ? pin.top_x - PIN_R : pin.top_y - PIN_R;
-  const touchPin = () => [zTo(5, 5, label), axis === "X" ? xyTo(PIN_BOX.left_x, pin.top_y, 50, label) : xyTo(pin.top_x, PIN_BOX.front_y, 50, label),
-    zTo(sideZ, 3, label), ...touch(label, axis.toLowerCase(), 1, contact), axis === "X" ? xyTo(contact - 1, pin.top_y, 20, label) : xyTo(pin.top_x, contact - 1, 20, label), zTo(5, 5, label)];
-  let orig;
-  const out = [instant(() => { orig = [velNow, accelNow]; velNow = 100; accelNow = 2000; say(tag + " version=2026-10-09-compatible-1 PROBE_ONLY=" + (probeOnly ? 1 : 0)); }),
-    ...prepareTool(j, pin.top_x, pin.top_y, label), ...touch(label, "z", -1, pin.top_z), zTo(5, 5, label),
-    ...touchPin(), instant(() => say(tag + " REFERENCE=" + f5(contact) + " SIDE_Z=" + f5(sideZ)))];
-  for (const accel of probeOnly ? Array(repeat).fill(null) : accels) {
-    if (!probeOnly) for (const line of burstScript(axis, accel, velocity, lo, hi, repeat)) { const c = parse(line); out.push(...(dispatch(c.cmd, c.p, c.words, label) || [])); }
-    out.push(...touchPin(), instant(() => say(tag + " ACCEL=" + (accel === null ? "None" : accel.toFixed(1)) + " VEL=" + (probeOnly ? "None" : velocity.toFixed(1)) +
-      " BEFORE=" + f5(contact) + " AFTER=" + f5(contact) + " DIFF=+0.00000 STEP_DIFF=+0.00000 mm TOL=" + tol.toFixed(3) + " -> OK")));
-  }
-  out.push(instant(() => { [velNow, accelNow] = orig; say("Selected tool remains " + t + "; its stored bed-pin offsets were requested."); }));
-  return out;
-}
-
-// bed mesh: the 9 x 9 probe path of [bed_mesh] (5..295 mm), serpentine like Klipper's standard path
+// probed mesh points and the calibration pin
 const meshDots = new THREE.Group();
 bedGroup.add(meshDots);
 const dotGeo = new THREE.CylinderGeometry(0.0012, 0.0012, 0.0004, 12), dotMat = new THREE.MeshBasicMaterial({ color: 0x4f8ff7 });
-function meshPath() {
-  const pts = [], n = 9, step = (295 - 5) / (n - 1);
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) pts.push([5 + (r % 2 ? n - 1 - c : c) * step, 5 + r * step]);
-  return pts;
-}
 function markPoint(x, y) {
   const d = new THREE.Mesh(dotGeo, dotMat);
   d.position.set(-(PRINT_SX0 + x) / 1000, (PEI_TOP + 0.3) / 1000, (PRINT_Z0 + y) / 1000); meshDots.add(d); dirty = true;
 }
-function bedMesh(custom, p) {
-  const label = "Bed mesh", repeats = custom ? (p.REPEATS ?? 2) : 1, pts = meshPath(), out = [];
-  if (!custom) {
-    // QUADRO_BED_MESH_CALIBRATE: T3, T2, T1 to the right Qdock, T0 to the centre, Z 5, then BED_MESH_CALIBRATE
-    out.push(moveCarriage(3, 469, 150, label), moveCarriage(2, 412.75, 150, label), moveCarriage(1, 356.5, 150, label), instant(() => activate(0)),
-      lineMove(label, () => (xRange(0)[1] >= 150 ? { x: sx.map((v, k) => (k === 0 ? PRINT_SX0 + 150 : v)), y: 150 } : null), 100), zTo(5, 5, label));
-  } else if (active !== 0) out.push(...toolMacro(0));
-  out.push(instant(() => { meshDots.clear(); dirty = true; }));
-  for (let pass = 0; pass < repeats; pass++) {
-    if (custom) out.push(instant(() => say("===== QUADRO MESH PASS " + (pass + 1) + "/" + repeats + " =====")));
-    pts.forEach(([x, y], i) => {
-      out.push(zTo(3, i === 0 ? 30 : 5, label), xyTo(x, y, 30, label));
-      if (custom) out.push(dwell(0.5, label), instant(() => say("Quadro mesh pass " + (pass + 1) + "/" + repeats + " point " + (i + 1) + "/" + pts.length + ": X=" + x.toFixed(2) + " Y=" + y.toFixed(2))));
-      // probe at 3 mm/s; [load_cell_probe] takes 3 samples with a 1 mm retract (the custom mesh takes 1)
-      out.push(zTo(0, 3, label));
-      if (!custom) for (let s = 0; s < 2; s++) out.push(zTo(1, 5, label), zTo(0, 3, label));
-      out.push(instant(() => markPoint(x, y)));
-    });
-    out.push(zTo(3, 5, label));
-    if (custom) out.push(instant(() => say("===== QUADRO MESH PASS " + (pass + 1) + "/" + repeats + " COMPLETE =====")));
-  }
-  out.push(instant(() => say("Mesh Bed Leveling Complete")));
-  return out;
+function addPin(pin) {
+  const r = 2.5, m = new THREE.Mesh(new THREE.CylinderGeometry(r / 1000, r / 1000, pin.last_measured_top_z / 1000, 24), new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 0.8, roughness: 0.3 }));
+  m.position.set(-(PRINT_SX0 + pin.top_x) / 1000, (PEI_TOP + pin.last_measured_top_z / 2) / 1000, (PRINT_Z0 + pin.top_y) / 1000);
+  bedGroup.add(m);
 }
 
-const HELP = [
-  "G28 [X] [Y] [Z]  home (the printer's homing_override)", "T0 / T1 / T2 / T3  toolchange macro", "G0 / G1 X Y Z F  move the active tool",
-  "G90 / G91  absolute / relative moves", "G4 P<ms>  dwell", "M114  report position",
-  "QUADRO_PARALLEL_MOVE T0= T1= T2= T3= Y= Z= SPEED= [ARRIVING=Tn]", "SET_DUAL_CARRIAGE CARRIAGE=carriage_t<n>",
-  "SET_VELOCITY_LIMIT VELOCITY= ACCEL=  /  M204 S<accel>", "PAUSE / RESUME / CANCEL_PRINT / PARK_TOOLHEAD", "START_PRINT  print the cube again",
-  "QUADRO_BED_MESH_CALIBRATE  /  QUADRO_CUSTOM_BED_MESH [REPEATS=2]", "BED_PIN_CALIBRATE_TOOL TOOL=Tn [CYCLES=1]  /  BED_PIN_CALIBRATE_ALL",
-  "BED_PIN_SAVE_OFFSETS  /  BED_PIN_APPLY_OFFSET TOOL=Tn",
-  "AXIS_SLIP_TEST AXIS=X|Y TOOL=Tn ACCEL= VELOCITY= [MIN= MAX= REPEAT= PROBE_ONLY=1]  (printer idle: CANCEL_PRINT first)",
-  "AXIS_SLIP_SWEEP AXIS=X|Y START= END= STEP= VELOCITY="];
-function parse(line) {
-  const words = line.trim().split(/\s+/), cmd = words.shift().toUpperCase(), p = {};
-  for (const w of words) {
-    const m = w.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) || w.match(/^([A-Za-z])(.*)$/);
-    if (m) p[m[1].toUpperCase()] = m[2] !== "" && !isNaN(Number(m[2])) ? Number(m[2]) : m[2] === "" ? true : m[2];
-  }
-  return { cmd, p, words };
+// temperatures card
+const tempsEl = $("temps"), HEATER_ROWS = [["extruder", "T0", 0], ["extruder1", "T1", 1], ["extruder2", "T2", 2], ["extruder3", "T3", 3], ["heater_bed", "Bed", -1]];
+function reportTemps() {
+  if (!K) return;
+  const h = K.heaters();
+  const html = HEATER_ROWS.map(([k, name, j]) => "<tr><td>" + (j >= 0 ? '<i style="background:' + COLORS[j] + '"></i>' : '<i style="background:#9a9ca2"></i>') + name + "</td><td>" + Math.round(h[k].power * 100) + "%</td><td>" + h[k].temp.toFixed(1) + " °C</td><td>" + (h[k].target ? h[k].target.toFixed(0) + " °C" : "off") + "</td></tr>").join("");
+  if (tempsEl.innerHTML !== html) tempsEl.innerHTML = html;
 }
-const MOTION = new Set(["G28", "G0", "G1", "T0", "T1", "T2", "T3", "QUADRO_PARALLEL_MOVE", "PARK_TOOLHEAD", "SET_DUAL_CARRIAGE", "G4",
-  "QUADRO_BED_MESH_CALIBRATE", "QUADRO_CUSTOM_BED_MESH", "BED_MESH_CALIBRATE", "BED_PIN_CALIBRATE_TOOL", "BED_PIN_CALIBRATE_ALL"]);
-// one command -> the phases it runs; also used for the G-code a module runs internally
-function dispatch(cmd, p, words) {
-  switch (cmd) {
-    case "HELP": HELP.forEach((h) => say(h)); return null;
-    case "G28": return home(words.map((w) => w.toUpperCase()).filter((w) => "XYZ".includes(w)));
-    case "G0": case "G1": return g1(p);
-    case "G90": return [instant(() => (absolute = true))];
-    case "G91": return [instant(() => (absolute = false))];
-    case "G4": return [dwell((p.P || 0) / 1000)];
-    case "M400": return null;
-    case "M114": return [instant(() => log("X:" + n3(phys(sx[active])) + " Y:" + n3(ny) + " Z:" + n3(zAbs()) + " E:0.000"))];
-    case "T0": case "T1": case "T2": case "T3": return toolMacro(Number(cmd[1]));
-    case "QUADRO_PARALLEL_MOVE": return parallelCommand(p);
-    case "SET_DUAL_CARRIAGE": {
-      const j = Number(String(p.CARRIAGE || "").replace("carriage_t", ""));
-      if (!(j >= 0 && j <= 3)) { err("Unknown carriage"); return null; }
-      return [instant(() => activate(j))];
-    }
-    case "SET_VELOCITY_LIMIT": return [instant(() => { if (p.VELOCITY) velNow = Math.min(p.VELOCITY, 1e4); if (p.ACCEL) accelNow = p.ACCEL; })];
-    case "M204": return [instant(() => { if (p.S) accelNow = p.S; })];
-    case "PARK_TOOLHEAD": return parkToolhead();
-    case "QUADRO_BED_MESH_CALIBRATE": case "BED_MESH_CALIBRATE": return bedMesh(false, p);
-    case "QUADRO_CUSTOM_BED_MESH": return bedMesh(true, p);
-    case "BED_PIN_CALIBRATE_TOOL": return pinCalibrateTool(p);
-    case "BED_PIN_CALIBRATE_ALL": return pinCalibrateAll();
-    case "BED_PIN_SAVE_OFFSETS": {
-      const missing = ["T0", "T1", "T2", "T3"].filter((t) => !pinResults[t]);
-      if (missing.length) { err("Refusing to overwrite offsets with incomplete calibration. Missing: " + missing.join(", ") + ". Run BED_PIN_CALIBRATE_ALL first."); return null; }
-      say("Offsets saved to " + OFFSETS_PATH + ":\n" + offsetsVsT0().map(([t, x, y, z]) => t + ": X=" + x.toFixed(3) + " Y=" + y.toFixed(3) + " Z=" + z.toFixed(3)).join("\n"));
-      return null;
-    }
-    case "BED_PIN_APPLY_OFFSET": {
-      const t = String(p.TOOL ?? "T0").toUpperCase();
-      if (!PIN[t]) { err("Unknown TOOL=" + t); return null; }
-      say("Applied offset for " + t + ": X=" + f5(PIN[t].top_x - PIN.T0.top_x) + " Y=" + f5(PIN[t].top_y - PIN.T0.top_y) + " Z=" + f5(PIN[t].top_z - PIN.T0.top_z));
-      return null;
-    }
-    case "AXIS_SLIP_TEST": return slipTest(p, [p.ACCEL ?? 7000], "AXIS_SLIP_TEST");
-    case "AXIS_SLIP_SWEEP": {
-      const a = [], s = p.START ?? 4000, e = p.END ?? 12000, st = p.STEP ?? 1000;
-      for (let v = s; v <= e + 1e-9; v += st) a.push(v);
-      return slipTest(p, a, "AXIS_SLIP_SWEEP");
-    }
-    case "PAUSE": if (!requestPause()) err("Print already paused"); return null;
-    case "RESUME": if (job !== "paused") { err("Print is not paused, resume aborted"); return null; } return resumePrint();
-    case "CANCEL_PRINT":
-      if (job === "printing") { pauseWanted = null; pausePrint(); }
-      if (job === "paused") { for (const ph of [saved.phase, ...saved.queue]) ph.line && trails.remove(ph.line); saved = null; job = "stopped"; say("Print cancelled"); }
-      else err("No print to cancel");
-      return null;
-    case "START_PRINT": case "SDCARD_PRINT_FILE": restart(0); return null;
-    case "M104": case "M109": case "M140": case "M190": case "M106": case "M107": say("Heaters and fans are not part of this simulation"); return null;
-    default: err('Unknown command:"' + cmd + '"'); return null;
-  }
-}
-function runCommand(line) {
-  if (!line.trim()) return;
-  log(line.trim(), "u");
-  const { cmd, p, words } = parse(line);
-  if (MOTION.has(cmd) && job === "printing") requestPause("Print paused so the console can drive the printer. Send RESUME to continue.");
-  const phases = dispatch(cmd, p, words);
-  if (phases) { const group = ++groupSeq; for (const ph of phases) ph.group = group; cmdQueue.push(...phases); }
-  setPlaying(true);
-}
+
 const cmdInput = $("cmd"), cmdHistory = [];
 let histAt = 0;
 $("cmd-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const line = cmdInput.value; cmdInput.value = "";
   if (line.trim()) { cmdHistory.push(line); histAt = cmdHistory.length; }
-  runCommand(line);
+  submit(line);
 });
 cmdInput.addEventListener("keydown", (e) => {
   if (e.key === "ArrowUp" && histAt > 0) { cmdInput.value = cmdHistory[--histAt]; e.preventDefault(); }
   if (e.key === "ArrowDown") { histAt = Math.min(cmdHistory.length, histAt + 1); cmdInput.value = cmdHistory[histAt] || ""; e.preventDefault(); }
 });
-document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => runCommand(b.dataset.cmd)));
+document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => submit(b.dataset.cmd)));
 document.querySelectorAll("[data-fill]").forEach((b) => b.addEventListener("click", () => { cmdInput.value = b.dataset.fill; cmdInput.focus(); }));
 // jog panel: what Mainsail sends for a jog button
 let jogStep = 10;
@@ -1425,16 +1195,16 @@ document.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("clic
 }));
 document.querySelectorAll("[data-jog]").forEach((b) => b.addEventListener("click", () => {
   const axis = b.dataset.jog[0], sign = b.dataset.jog[1] === "-" ? -1 : 1;
-  runCommand("G91"); runCommand("G1 " + axis + (sign * jogStep) + " F" + (axis === "Z" ? 1500 : 6000)); runCommand("G90");
+  submit("G91"); submit("G1 " + axis + (sign * jogStep) + " F" + (axis === "Z" ? 1500 : 6000)); submit("G90");
 }));
-
+fetch(CONFIG_URL).then((r) => r.json()).then((config) => { startKlipper(config); addPin(config.bedPin.T0); }).catch((e) => log("!! Could not load the printer config: " + e.message, "e"));
 
 // ---------- loop ----------
 let last = 0, frame = 0;
 function tick(now) {
   const dt = last ? Math.min((now - last) / 1000, 0.1) : 1 / 60;
   last = now;
-  if (playing && ready) { step(dt * cfg.scale); sampleVelocity(dt * cfg.scale); draw(); }
+  if (playing && ready) { step(dt * cfg.scale); if (K) K.tick(dt * cfg.scale); sampleVelocity(dt * cfg.scale); draw(); }
   if (tween) {
     tween.t = Math.min(1, tween.t + dt / 0.7);
     const k = tween.t < 0.5 ? 2 * tween.t * tween.t : 1 - Math.pow(-2 * tween.t + 2, 2) / 2;
@@ -1461,7 +1231,7 @@ document.querySelectorAll("[data-speed]").forEach((b) => b.addEventListener("cli
   cfg.scale = Number(b.dataset.speed);
   document.querySelectorAll("[data-speed]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
 }));
-log("START_PRINT", "c");
+log("SDCARD_PRINT_FILE FILENAME=alignment_test_cube.gcode", "c");
 setPlaying(playing);
 report();
 </script>
