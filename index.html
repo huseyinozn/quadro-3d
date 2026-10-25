@@ -84,6 +84,8 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .pad .z-up { grid-area: zu; } .pad .z-down { grid-area: zd; }
 .cmdline { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--d-line); }
 .cmdline input { flex: 1; min-width: 0; background: var(--d-bg); color: var(--d-ink); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 10px; font: 14px var(--mono); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
+/* iOS zooms the page into any focused field under 16px; keep the typing fields at 16px on touch screens */
+@media (pointer: coarse) { .cmdline input { font-size: 16px; } }
 .ask-log { max-height: 320px; overflow-y: auto; padding: 10px 12px; display: grid; gap: 10px; font-size: 14px; }
 .ask-log:empty { display: none; }
 .ask-log p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1257,13 +1259,16 @@ askForm.addEventListener("submit", async (e) => {
   const a = document.createElement("p"); a.className = "a wait"; a.textContent = "Thinking…";
   askLog.append(q, a); askLog.scrollTop = askLog.scrollHeight;
   try {
-    const res = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, history: askHistory.slice(-12), state: askState() }) });
+    // a plain-text body keeps this a "simple" request (no CORS preflight); give up after 45 s rather than wait forever
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 45000);
+    const res = await fetch(ASK_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify({ question, history: askHistory.slice(-12), state: askState() }), signal: ctl.signal })
+      .finally(() => clearTimeout(timer));
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.answer) throw new Error(data.error || "The assistant is unavailable right now.");
     a.className = "a"; askRender(a, data.answer);
     askHistory.push({ role: "user", content: question }, { role: "assistant", content: data.answer });
   } catch (err) {
-    a.className = "a e"; a.textContent = err instanceof TypeError ? "The assistant can't be reached from this copy of the page." : err.message;
+    a.className = "a e"; a.textContent = err.name === "AbortError" ? "No answer in time, please try again." : err instanceof TypeError ? "The assistant can't be reached (" + err.message + ")." : err.message;
   }
   delete askForm.dataset.busy; askLog.scrollTop = askLog.scrollHeight;
 });
