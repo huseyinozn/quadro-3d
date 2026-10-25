@@ -48,6 +48,7 @@ button[data-play] { min-width: 104px; font-weight: 600; }
 .dash { --d-bg: #121315; --d-card: #1d1e21; --d-head: #26282c; --d-ink: #e9eaec; --d-muted: #9a9ca2; --d-line: #33353a; --d-accent: #4f8ff7;
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; border-radius: 12px; background: var(--d-bg); color: var(--d-ink); }
 .card { background: var(--d-card); border: 1px solid var(--d-line); border-radius: 8px; overflow: hidden; min-width: 0; }
+.card h2 small { text-align: right; }
 .card h2 { margin: 0; padding: 8px 12px; background: var(--d-head); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
 .card h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--d-muted); font-family: var(--mono); }
 .card .body { padding: 10px 12px; }
@@ -66,7 +67,11 @@ td:first-child { font-family: var(--sans); font-weight: 600; }
 td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: var(--d-accent); font-size: 10px; }
 .console { height: 210px; overflow-y: auto; margin: 0; padding: 8px 12px; font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.console .t { color: var(--d-muted); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
+.console .t { color: var(--d-muted); } .console .e { color: #ff7b72; } .console .u { color: #fff; font-weight: 600; }
+.macros { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 0; }
+.macros button, .cmdline button { background: var(--d-head); color: var(--d-ink); border-color: var(--d-line); min-height: 34px; padding: 4px 12px; font: 500 13px var(--mono); }
+.cmdline { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--d-line); }
+.cmdline input { flex: 1; min-width: 0; background: var(--d-bg); color: var(--d-ink); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 10px; font: 14px var(--mono); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
 @media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
 </style>
@@ -130,8 +135,10 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         <div class="body"><table><thead><tr><th>Axis</th><th>From → to</th><th>Peak</th><th>Start</th></tr></thead><tbody id="tc"></tbody></table></div>
       </section>
       <section class="card wide">
-        <h2>Console</h2>
+        <h2>Console <small>try G28, T2, G1 X150 Y100 F6000, M114 or HELP</small></h2>
+        <div class="macros"><button data-cmd="G28">G28</button><button data-cmd="T0">T0</button><button data-cmd="T1">T1</button><button data-cmd="T2">T2</button><button data-cmd="T3">T3</button><button data-cmd="PAUSE">PAUSE</button><button data-cmd="RESUME">RESUME</button><button data-cmd="M114">M114</button><button data-cmd="HELP">HELP</button></div>
         <pre class="console" id="console" aria-live="off"></pre>
+        <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
       </section>
     </div>
     <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower.</p>
@@ -771,7 +778,7 @@ const clock = (t) => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padSt
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 function log(text, cls = "") {
   const line = document.createElement("div");
-  line.innerHTML = '<span class="t">' + clock(stats.time) + "</span> " + (cls ? '<span class="' + cls + '">' + esc(text) + "</span>" : esc(text));
+  line.innerHTML = '<span class="t">' + clock(simClock) + "</span> " + (cls ? '<span class="' + cls + '">' + esc(text) + "</span>" : esc(text));
   consoleEl.append(line);
   while (consoleEl.childElementCount > 120) consoleEl.firstElementChild.remove();
   consoleEl.scrollTop = consoleEl.scrollHeight;
@@ -838,7 +845,7 @@ function extrudePhase(kind, path, onEnd) {
 }
 function nextJob() {
   if (jobAt >= jobs.length) {
-    if (layer + 1 >= LAYERS) { phase = { kind: "done" }; setPlaying(false); return; }
+    if (layer + 1 >= LAYERS) { phase = { kind: "done", t: 0, T: 0, run() {} }; job = "done"; log("// Done printing file", "r"); return; }
     layer++; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0;
     log(";LAYER_CHANGE  Z" + zNow().toFixed(2), "c");
   }
@@ -859,16 +866,25 @@ function nextJob() {
   queue.push(extrudePhase("print", path, () => { done.add(job.q); growBlocks(); }));
   advance();
 }
-function advance() { phase = queue.shift() || { kind: "idle" }; phase.t = 0; phase.T = 0; phase.run ||= () => {}; phase.begin?.(); }
+function startPhase(p) { phase = p; phase.t = 0; phase.T = 0; phase.run ||= () => {}; phase.begin?.(); }
+// console commands go first; otherwise the print carries on, or the printer waits for the next command
+function advance() {
+  if (pauseWanted && job === "printing" && queue[0]?.kind !== "change") { const { note } = pauseWanted; pauseWanted = null; pausePrint(note, true); }
+  if (cmdQueue.length && !pauseWanted) return startPhase(cmdQueue.shift());
+  if (job === "printing") return startPhase(queue.shift() || { kind: "idle" });
+  startPhase({ kind: job === "done" ? "done" : "ready" });
+}
 function step(dt) {
   while (dt > 1e-9) {
-    if (phase.kind === "idle") nextJob();
-    if (phase.kind === "done") return;
+    if (phase.kind === "idle" && job === "printing" && (!cmdQueue.length || pauseWanted)) { if (queue.length) advance(); else nextJob(); }
+    else if (["idle", "ready", "done"].includes(phase.kind)) { if (!cmdQueue.length) { simClock += dt; return; } advance(); }
+    if (phase.kind === "done" && !cmdQueue.length) return;
     const use = Math.min(dt, phase.T - phase.t);
-    phase.t += use; dt -= use; stats.time += use;
+    phase.t += use; dt -= use; simClock += use;
+    if (job === "printing") stats.time += use;
     if (phase.tc) phase.tc.t += use;
     phase.run(phase.t);
-    if (phase.t >= phase.T - 1e-9) { phase.end?.(); advance(); }
+    if (phase.t >= phase.T - 1e-9) { phase.end?.(); if (phase.resumeTo) phase = phase.resumeTo; else advance(); }
   }
 }
 // the printed cube: one box per block, grown as its layers are finished
@@ -913,7 +929,7 @@ function growBlocks() {
 }
 function restart(toLayer = 0) {
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
-  phase.end = null; queue = [];
+  phase.end = null; queue = []; cmdQueue = []; saved = null; pauseWanted = null; job = "printing"; absolute = true; velNow = LIMITS.v; accelNow = LIMITS.a;
   // place the heads as the printer would have them: the active tool over the part, the others parked either side
   active = fillTower(toLayer); setActive(active);
   sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
@@ -936,20 +952,22 @@ function draw() {
 const $ = (id) => document.getElementById(id);
 const readout = $("readout"), toolsEl = $("tools");
 function slotName(x) { for (let i = 0; i < 3; i++) { if (Math.abs(x - LP[i]) < 0.5) return "Docked, Qdock L" + (i + 1); if (Math.abs(x - RP[i]) < 0.5) return "Docked, Qdock R" + (i + 1); } return null; }
-const STATE = { change: "Toolchange", travel: "Travel", purge: "Prime tower", print: "Printing", done: "Complete", idle: "Ready", note: "Printing" };
+const STATE = { change: "Toolchange", travel: "Travel", purge: "Prime tower", print: "Printing", done: "Complete", idle: "Printing", note: "Printing" };
+const stateName = () => (phase.kind === "manual" ? phase.label : phase.kind === "ready" ? (job === "paused" ? "Paused" : job === "stopped" ? "Cancelled" : "Ready") : STATE[phase.kind] || "Ready");
 let vel = 0, lastPos = null;
 function set(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 function report() {
   const z = zNow() + hop, k = phase.kind;
   let text = "Layer " + (layer + 1) + "/" + LAYERS + " · ";
   if (k === "change") text += "Toolchange " + (phase.tc.prev < 0 ? "start" : "T" + phase.tc.prev) + " → T" + phase.tc.next;
+  else if (job !== "printing" && job !== "done") text = [job === "paused" ? "Paused" : job === "stopped" ? "Cancelled" : "", stateName()].filter((s, i, all) => s && all.indexOf(s) === i).join(" · ") + (active >= 0 ? " · T" + active : "");
   else if (k === "done") text = "Print complete";
   else if (active >= 0) text += "T" + active + " " + (STATE[k] || "").toLowerCase();
   if (readout.textContent !== text) readout.innerHTML = "<b>" + text + "</b>";
   const progress = k === "done" ? 1 : (layer + jobAt / 4) / LAYERS;
   set("pct", Math.floor(progress * 100) + "%"); $("bar").style.width = (progress * 100).toFixed(1) + "%";
   set("d-layer", (layer + 1) + " / " + LAYERS); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
-  set("d-state", STATE[k] || "Ready"); set("d-tool", active < 0 ? "—" : "T" + active);
+  set("d-state", stateName()); set("d-tool", active < 0 ? "—" : "T" + active);
   set("d-x", active < 0 ? "—" : fmt(phys(sx[active]), 2)); set("d-y", fmt(ny, 2)); set("d-z", fmt(z, 2));
   set("d-v", fmt(vel) + " mm/s"); set("d-purge", fmt(stats.purge) + " mm³");
   const html = sx.map((x, j) => {
@@ -965,6 +983,229 @@ function sampleVelocity(dt) {
   if (lastPos) { const v = Math.hypot(p[0] - lastPos[0], p[1] - lastPos[1], p[2] - lastPos[2]) / dt; vel += (v - vel) * Math.min(1, dt * 12); }
   lastPos = p;
 }
+
+// ---------- console: type G-code and the printer's macros, as on the real machine ----------
+// The behaviour follows the printer's config: homing_override + _HOME_X/_HOME_Y/_HOME_Z, PAUSE/RESUME/PARK_TOOLHEAD,
+// the T0..T3 macros (cp_macro.cfg, tool_map.cfg) and QUADRO_PARALLEL_MOVE (quadro_parallel_carriage.py).
+const X_LIMITS = [[-169, 303.25], [-112.75, 359.5], [-59.5, 412.75], [-3.25, 469]], Y_LIMITS = [-1, 318], Z_LIMITS = [-5, 310];
+const X_HOME = [-169, -112.75, 412.75, 469], CLEARANCE = 56.25;
+let groupSeq = 0, job = "printing", cmdQueue = [], saved = null, absolute = true, feed = 300, velNow = LIMITS.v, accelNow = LIMITS.a, simClock = 0;
+const zAbs = () => zNow() + hop;
+const n3 = (v) => v.toFixed(3);
+const err = (text) => log("!! " + text, "e"), say = (text) => log("// " + text, "r");
+const instant = (fn) => ({ kind: "manual", label: "Busy", begin() { fn(); } });
+// a failed check drops the rest of that command, as Klipper does when a macro raises an error
+const abort = (ph) => { cmdQueue = cmdQueue.filter((q) => q.group !== ph.group); };
+const check = (fn) => ({ kind: "manual", label: "Busy", begin() { const e = fn(); if (e) { err(e); abort(this); } } });
+const dwell = (s, label = "Busy") => ({ kind: "manual", label, begin() { this.T = s; } });
+// One Klipper move: every listed axis on a single trapezoid along the move vector (G1, homing moves, manual_move).
+// For several X carriages the longest carriage travel is the primary; the others follow scaled (COPY/MIRROR).
+function lineMove(label, targets, speed, accel = () => accelNow) {
+  return { kind: "manual", label, begin() {
+      this.p = null;
+      const t = targets(); if (!t) { this.T = 0; abort(this); return; }
+      this.x0 = sx.slice(); this.y0 = ny; this.z0 = zAbs();
+      this.x1 = t.x || this.x0; this.y1 = t.y ?? ny; this.z1 = t.z ?? this.z0;
+      const dx = Math.max(...this.x1.map((x, j) => Math.abs(x - this.x0[j]))), dy = this.y1 - this.y0, dz = this.z1 - this.z0;
+      const L = Math.hypot(dx, dy, dz);
+      let v = Math.min(typeof speed === "function" ? speed() : speed, velNow), a = typeof accel === "function" ? accel() : accel;
+      if (Math.abs(dz) > 1e-9) { v = Math.min(v, LIMITS.vz * L / Math.abs(dz)); a = Math.min(a, LIMITS.az * L / Math.abs(dz)); }
+      this.L = L; this.p = profile(0, L, v, a); this.T = this.p.T;
+    },
+    run(t) {
+      if (!this.p) return;
+      const f = this.L ? posAt(this.p, t) / this.L : 1;
+      sx = this.x0.map((x, j) => x + (this.x1[j] - x) * f); ny = this.y0 + (this.y1 - this.y0) * f; hop = this.z0 + (this.z1 - this.z0) * f - zNow();
+    } };
+}
+const moveCarriage = (j, x, speed, label) => lineMove(label, () => ({ x: sx.map((v, k) => (k === j ? PRINT_SX0 + x : v)) }), speed);
+const moveZ = (dz, speed, label) => lineMove(label, () => ({ z: zAbs() + dz }), speed);
+function activate(j) { active = j; setActive(j); }
+// where the active carriage may go without passing its neighbours (min_clearance) or leaving its rail
+function xRange(j, xs = sx.map(phys)) {
+  return [Math.max(X_LIMITS[j][0], j > 0 ? xs[j - 1] + CLEARANCE : -Infinity), Math.min(X_LIMITS[j][1], j < 3 ? xs[j + 1] - CLEARANCE : Infinity)];
+}
+
+function homeX() {
+  const order = [0, 1, 3, 2], slow = [], fast = [];
+  for (const j of order) fast.push(moveCarriage(j, X_HOME[j], 60, "Homing X"));
+  for (const j of order) slow.push(moveCarriage(j, X_HOME[j], 20, "Homing X"));
+  return [instant(() => { velNow = 500; accelNow = 5000; }), ...fast,
+    moveCarriage(2, 372, 100, "Homing X"), moveCarriage(3, 449, 100, "Homing X"), moveCarriage(1, -72, 100, "Homing X"), moveCarriage(0, -149, 100, "Homing X"),
+    dwell(2, "Homing X"), ...slow,
+    // QUADRO_DISTRIBUTE_X: QUADRO_PARALLEL_MOVE T0=150 T1=356.50 SPEED=300
+    lineMove("Homing X", () => ({ x: [PRINT_SX0 + 150, PRINT_SX0 + 356.5, sx[2], sx[3]] }), 300), instant(() => activate(0))];
+}
+function homeY() {
+  return [dwell(1, "Homing Y"), lineMove("Homing Y", () => ({ y: Y_LIMITS[0] }), 60), lineMove("Homing Y", () => ({ y: 9 }), 20),
+    dwell(2, "Homing Y"), lineMove("Homing Y", () => ({ y: Y_LIMITS[0] }), 20), lineMove("Homing Y", () => ({ y: 9 }), 20)];
+}
+function homeZ() {
+  const toCentre = lineMove("Homing Z", () => {
+    if (xRange(0)[1] < 150) { err("Move out of range: 150.000 150.000 " + n3(zAbs()) + " [0.000]"); return null; }
+    return { x: sx.map((v, k) => (k === 0 ? PRINT_SX0 + 150 : v)), y: 150 };
+  }, 100);
+  return [instant(() => activate(0)), toCentre, dwell(1, "Probing"),
+    lineMove("Probing", () => ({ z: 0 }), 5), moveZ(2, 5, "Probing"), lineMove("Probing", () => ({ z: 0 }), 5), moveZ(10, 5, "Probing")];
+}
+function home(axes) {
+  const all = !axes.length;
+  return [moveZ(5, 5, "Homing"), ...(all || axes.includes("X") ? homeX() : []), ...(all || axes.includes("Y") ? homeY() : []),
+    ...(all || axes.includes("Z") ? homeZ() : []),
+    instant(() => { activate(0); log("echo: Home finished: reset active tool to T0"); })];
+}
+// T0..T3 typed on the console carry no X/Y: the macro parks the tools that are in the way, lifts Z 0.4 + 3 mm and makes Tn primary
+function toolMacro(next) {
+  if (next === active) return [instant(() => log("echo: Already on T" + next))];
+  let prevAccel, z0;
+  return [instant(() => { prevAccel = accelNow; accelNow = 7000; z0 = zAbs(); }), moveZ(TC.hopPre, 30, "Toolchange"),
+    lineMove("Toolchange", () => ({ x: sx.map((x, j) => (j < next ? LP[j] : j > next ? RP[j - 1] : x)), z: z0 + TC.hop }), TC.speed),
+    instant(() => { accelNow = prevAccel; activate(next); if (job === "printing") stats.changes++; })];
+}
+function parkToolhead() {
+  return [moveZ(2, 15, "Parking"), lineMove("Parking", () => {
+    const x = X_HOME[active], [lo, hi] = xRange(active);
+    if (x < lo - 1e-6 || x > hi + 1e-6) { err("Move out of range: " + n3(x) + " 148.000 " + n3(zAbs()) + " [0.000]"); return null; }
+    return { x: sx.map((v, k) => (k === active ? PRINT_SX0 + x : v)), y: 148 };
+  }, 100)];
+}
+// PAUSE waits for a running toolchange macro to finish, as Klipper finishes the current command first
+let pauseWanted = null;
+function requestPause(note) {
+  if (job !== "printing" || pauseWanted) return false;
+  if (phase.kind === "change") { pauseWanted = { note }; return true; }
+  return pausePrint(note);
+}
+function pausePrint(note, atBoundary) {
+  if (job !== "printing") return false;
+  saved = { phase: atBoundary ? { kind: "idle" } : phase, queue, sx: sx.slice(), ny, hop, active };
+  job = "paused"; queue = []; phase = { kind: "ready", t: 0, T: 0, run() {} };
+  if (note) say(note);
+  cmdQueue.unshift(...parkToolhead());
+  return true;
+}
+function resumePrint() {
+  const s = saved;
+  return [...(active !== s.active ? toolMacro(s.active) : []),
+    // RESUME_BASE: back to where the print stopped, every carriage, the bed and Z, then carry on
+    lineMove("Resuming", () => ({ x: s.sx, y: s.ny, z: zNow() + s.hop }), 50),
+    { kind: "manual", label: "Resuming", begin() { job = "printing"; queue = s.queue; saved = null; this.resumeTo = s.phase; } }];
+}
+// QUADRO_PARALLEL_MOVE as the module runs it: limits and clearance checked at start and target, then
+// ARRIVING -> method B (independent trapezoids, arriving tool delayed), otherwise one scaled manual_move
+function parallelCommand(p) {
+  const names = ["carriage_t0", "carriage_t1", "carriage_t2", "carriage_t3"], gap = p.MIN_CLEARANCE ?? CLEARANCE;
+  if (![0, 1, 2, 3].some((j) => p["T" + j] !== undefined) && p.Y === undefined && p.Z === undefined) return err("Specify T0/T1/T2/T3 and/or Y/Z target");
+  const arriving = p.ARRIVING === undefined ? -1 : Number(String(p.ARRIVING).replace(/^T/i, ""));
+  if (p.ARRIVING !== undefined && !(arriving >= 0 && arriving <= 3)) return err("ARRIVING must be T0, T1, T2 or T3");
+  let to;
+  // limits and clearance are checked when the command runs, against where the carriages are then
+  const validate = check(() => {
+    const xs = sx.map(phys); to = xs.map((x, j) => p["T" + j] ?? x);
+    for (let j = 0; j < 4; j++) {
+      if (to[j] < X_LIMITS[j][0] - 1e-6) return names[j] + " target " + n3(to[j]) + " is below minimum " + n3(X_LIMITS[j][0]);
+      if (to[j] > X_LIMITS[j][1] + 1e-6) return names[j] + " target " + n3(to[j]) + " is above maximum " + n3(X_LIMITS[j][1]);
+    }
+    for (const [label, set] of [["START", xs], ["TARGET", to]]) for (let j = 0; j < 3; j++) if (set[j + 1] - set[j] < gap - 1e-6)
+      return label + " clearance violation: " + names[j] + "=" + n3(set[j]) + ", " + names[j + 1] + "=" + n3(set[j + 1]) + ", clearance=" + n3(set[j + 1] - set[j]) + " mm, required=" + n3(gap) + " mm";
+    if (p.Y !== undefined && (p.Y < Y_LIMITS[0] || p.Y > Y_LIMITS[1])) return "Move out of range: Y " + n3(p.Y);
+    if (p.Z !== undefined && (p.Z < Z_LIMITS[0] || p.Z > Z_LIMITS[1])) return "Move out of range: Z " + n3(p.Z);
+    if (arriving >= 0 && p["T" + arriving] === undefined) return "ARRIVING must have an explicit target";
+  });
+  const speed = () => Math.min(p.SPEED ?? 50, velNow);
+  const done = instant(() => say("QUADRO_PARALLEL_MOVE complete\n" + sx.map((x, j) => "T" + j + "=" + n3(phys(x))).join(" ") + " Y=" + n3(ny) + " Z=" + n3(zAbs())));
+  if (arriving < 0) return [validate, lineMove("Parallel move", () => ({ x: to.map((x) => PRINT_SX0 + x), y: p.Y, z: p.Z }), speed), done];
+  return [validate, { kind: "manual", label: "Parallel move", begin() {
+      const v = speed(), a = accelNow, ps = sx.map((x, j) => profile(x, PRINT_SX0 + to[j], v, a));
+      const py = profile(ny, p.Y ?? ny, v, a), pz = profile(hop, (p.Z ?? zAbs()) - zNow(), Math.min(v, LIMITS.vz), Math.min(a, LIMITS.az));
+      this.T = Math.max(py.T, pz.T, ...ps.map((q) => q.T));
+      if (ps[arriving].T) ps[arriving].delay = this.T - ps[arriving].T;
+      this.plan = { ps, py, pz };
+      say("QUADRO delayed plan: ARRIVING=T" + arriving + " delay=" + ps[arriving].delay.toFixed(6) + "s finish=" + this.T.toFixed(6) + "s speed=" + v.toFixed(3) + " accel=" + a.toFixed(3));
+    },
+    run(t) { const { ps, py, pz } = this.plan; sx = ps.map((q) => posAt(q, t)); ny = posAt(py, t); hop = posAt(pz, t); } }, done];
+}
+function g1(p) {
+  return [lineMove("Moving", () => {
+    if (active < 0) { err("No active tool"); return null; }
+    if (p.F !== undefined) feed = p.F / 60;
+    const cur = [phys(sx[active]), ny, zAbs()];
+    const tgt = ["X", "Y", "Z"].map((k, i) => (p[k] === undefined ? cur[i] : absolute ? p[k] : cur[i] + p[k]));
+    const [lo, hi] = xRange(active);
+    if (tgt[0] < lo - 1e-6 || tgt[0] > hi + 1e-6 || tgt[1] < Y_LIMITS[0] || tgt[1] > Y_LIMITS[1] || tgt[2] < Z_LIMITS[0] || tgt[2] > Z_LIMITS[1]) {
+      err("Move out of range: " + tgt.map(n3).join(" ") + " [0.000]"); return null;
+    }
+    return { x: sx.map((v, k) => (k === active ? PRINT_SX0 + tgt[0] : v)), y: tgt[1], z: tgt[2] };
+  }, () => feed)];
+}
+const HELP = [
+  "G28 [X] [Y] [Z]  home (the printer's homing_override)", "T0 / T1 / T2 / T3  toolchange macro", "G0 / G1 X Y Z F  move the active tool",
+  "G90 / G91  absolute / relative moves", "G4 P<ms>  dwell", "M114  report position",
+  "QUADRO_PARALLEL_MOVE T0= T1= T2= T3= Y= Z= SPEED= [ARRIVING=Tn]", "SET_DUAL_CARRIAGE CARRIAGE=carriage_t<n>",
+  "SET_VELOCITY_LIMIT VELOCITY= ACCEL=  /  M204 S<accel>", "PAUSE / RESUME / CANCEL_PRINT / PARK_TOOLHEAD", "START_PRINT  print the cube again"];
+function parse(line) {
+  const words = line.trim().split(/\s+/), cmd = words.shift().toUpperCase(), p = {};
+  for (const w of words) {
+    const m = w.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/) || w.match(/^([A-Za-z])(.*)$/);
+    if (m) p[m[1].toUpperCase()] = m[2] !== "" && !isNaN(Number(m[2])) ? Number(m[2]) : m[2] === "" ? true : m[2];
+  }
+  return { cmd, p, words };
+}
+const MOTION = new Set(["G28", "G0", "G1", "T0", "T1", "T2", "T3", "QUADRO_PARALLEL_MOVE", "PARK_TOOLHEAD", "SET_DUAL_CARRIAGE", "G4"]);
+function runCommand(line) {
+  if (!line.trim()) return;
+  log(line.trim(), "u");
+  const { cmd, p, words } = parse(line);
+  if (MOTION.has(cmd) && job === "printing") requestPause("Print paused so the console can drive the printer. Send RESUME to continue.");
+  let phases = null;
+  switch (cmd) {
+    case "HELP": HELP.forEach((h) => say(h)); break;
+    case "G28": phases = home(words.map((w) => w.toUpperCase()).filter((w) => "XYZ".includes(w))); break;
+    case "G0": case "G1": phases = g1(p); break;
+    case "G90": phases = [instant(() => (absolute = true))]; break;
+    case "G91": phases = [instant(() => (absolute = false))]; break;
+    case "G4": phases = [dwell((p.P || 0) / 1000)]; break;
+    case "M400": break;
+    case "M114": phases = [instant(() => log("X:" + n3(phys(sx[active])) + " Y:" + n3(ny) + " Z:" + n3(zAbs()) + " E:0.000"))]; break;
+    case "T0": case "T1": case "T2": case "T3": phases = toolMacro(Number(cmd[1])); break;
+    case "QUADRO_PARALLEL_MOVE": phases = parallelCommand(p); break;
+    case "SET_DUAL_CARRIAGE": {
+      const j = Number(String(p.CARRIAGE || "").replace("carriage_t", ""));
+      if (!(j >= 0 && j <= 3)) err("Unknown carriage"); else phases = [instant(() => activate(j))];
+      break;
+    }
+    case "SET_VELOCITY_LIMIT":
+      if (p.VELOCITY) velNow = Math.min(p.VELOCITY, 1e4); if (p.ACCEL) accelNow = p.ACCEL;
+      say("max_velocity: " + n3(velNow) + "\nmax_accel: " + n3(accelNow)); break;
+    case "M204": if (p.S) accelNow = p.S; break;
+    case "PARK_TOOLHEAD": phases = parkToolhead(); break;
+    case "PAUSE": if (!requestPause()) err("Print already paused"); break;
+    case "RESUME": if (job !== "paused") err("Print is not paused, resume aborted"); else phases = resumePrint(); break;
+    case "CANCEL_PRINT":
+      if (job === "printing") { pauseWanted = null; pausePrint(); }
+      if (job === "paused") { for (const ph of [saved.phase, ...saved.queue]) ph.line && trails.remove(ph.line); saved = null; job = "stopped"; say("Print cancelled"); }
+      else err("No print to cancel");
+      break;
+    case "START_PRINT": case "SDCARD_PRINT_FILE": restart(0); break;
+    case "M104": case "M109": case "M140": case "M190": case "M106": case "M107": say("Heaters and fans are not part of this simulation"); break;
+    default: err('Unknown command:"' + cmd + '"');
+  }
+  if (phases) { const group = ++groupSeq; for (const ph of phases) ph.group = group; cmdQueue.push(...phases); }
+  setPlaying(true);
+}
+const cmdInput = $("cmd"), cmdHistory = [];
+let histAt = 0;
+$("cmd-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const line = cmdInput.value; cmdInput.value = "";
+  if (line.trim()) { cmdHistory.push(line); histAt = cmdHistory.length; }
+  runCommand(line);
+});
+cmdInput.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowUp" && histAt > 0) { cmdInput.value = cmdHistory[--histAt]; e.preventDefault(); }
+  if (e.key === "ArrowDown") { histAt = Math.min(cmdHistory.length, histAt + 1); cmdInput.value = cmdHistory[histAt] || ""; e.preventDefault(); }
+});
+document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => runCommand(b.dataset.cmd)));
 
 // ---------- loop ----------
 let last = 0, frame = 0;
