@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive 3D simulation of the Co Print Quadro four-toolhead 3D printer and its toolchanges.">
+<meta property="og:title" content="Co Print Quadro 3D">
+<meta property="og:description" content="Four independent toolheads, one X beam, synchronized toolchanges. Explore the Quadro in 3D.">
+<link rel="icon" href="logo.svg">
+<style>body{margin:0}</style>
+</head><body>
+<title>Co Print Quadro 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one wide viewer on top, the control desk below it; stacks to one column on a phone. */
+:root {
+  --bg: #f1f1ee; --panel: #fbfbf9; --ink: #1b1c1e; --muted: #6b6d72; --line: #dcdcd7; --accent: #2f6fd6;
+  --stage-top: #fdfdfb; --stage-bottom: #e6e6e1;
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e0f10; --panel: #161719; --ink: #e8e8e6; --muted: #8d8f94; --line: #2a2c2f; --accent: #6b9bff;
+  --stage-top: #1c1d20; --stage-bottom: #0f1011; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e0f10; --panel: #161719; --ink: #e8e8e6; --muted: #8d8f94; --line: #2a2c2f; --accent: #6b9bff;
+  --stage-top: #1c1d20; --stage-bottom: #0f1011; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+.page { max-width: 1100px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+h1 { margin: 0; font-size: 26px; letter-spacing: .02em; font-weight: 600; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); font-size: 14px; }
+.stage { position: relative; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: linear-gradient(var(--stage-top), var(--stage-bottom)); aspect-ratio: 4 / 3; max-height: 72vh; width: 100%; touch-action: none; }
+.stage canvas { display: block; width: 100%; height: 100%; }
+.hud { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; justify-content: space-between; gap: 12px; pointer-events: none; font: 12px/1.4 var(--mono); color: var(--muted); }
+.hud b { color: var(--ink); font-weight: 500; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 13px var(--mono); color: var(--muted); }
+.desk { display: grid; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.label { color: var(--muted); font-size: 13px; margin: 0 4px 0 6px; }
+button { font: inherit; font-size: 14px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[data-play] { min-width: 104px; font-weight: 600; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.speed button { border: 0; border-radius: 0; min-width: 48px; }
+.speed button + button { border-left: 1px solid var(--line); }
+.speed button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+/* Dashboard: printer-interface cards (dark in both themes, like a printer web UI) */
+.dash { --d-bg: #121315; --d-card: #1d1e21; --d-head: #26282c; --d-ink: #e9eaec; --d-muted: #9a9ca2; --d-line: #33353a; --d-accent: #4f8ff7;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; border-radius: 12px; background: var(--d-bg); color: var(--d-ink); }
+.card { background: var(--d-card); border: 1px solid var(--d-line); border-radius: 8px; overflow: hidden; min-width: 0; }
+.card h2 { margin: 0; padding: 8px 12px; background: var(--d-head); font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+.card h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--d-muted); font-family: var(--mono); }
+.card .body { padding: 10px 12px; }
+.card.wide { grid-column: 1 / -1; }
+.file { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.bar { height: 6px; border-radius: 3px; background: var(--d-line); margin: 8px 0 10px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--d-accent); }
+.kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.kv div { min-width: 0; }
+.kv span { display: block; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; }
+.kv b { font: 500 15px var(--mono); font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px 6px 0; }
+td { padding: 5px 6px 5px 0; border-top: 1px solid var(--d-line); font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td:first-child { font-family: var(--sans); font-weight: 600; }
+td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: var(--d-accent); font-size: 10px; }
+.console { height: 210px; overflow-y: auto; margin: 0; padding: 8px 12px; font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.console .t { color: var(--d-muted); } .console .r { color: #8fd18f; } .console .c { color: var(--d-muted); }
+.about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
+@media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
+</style>
+
+<div class="page">
+  <header>
+    <h1>Co Print Quadro</h1>
+    <p>Four independent toolheads on one X beam, parking in Qdock stations at both ends</p>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">Loading model…</div>
+    <div class="hud"><span>Drag to rotate · pinch to zoom</span><span id="readout"><b>Ready</b></span></div>
+  </div>
+
+  <div class="desk">
+    <div class="row">
+      <button id="play" data-play aria-pressed="true">Pause</button>
+      <button id="restart">Restart</button>
+      <button id="skip">Skip 10 layers</button>
+      <span class="label">Playback</span>
+      <span class="speed" id="speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button></span>
+    </div>
+    <div class="row">
+      <span class="label">View</span>
+      <button data-view="front">Front</button><button data-view="iso">Isometric</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="dock">Qdock</button><button data-view="part">Part</button><button data-view="room">Desk</button><button id="room-toggle">Hide room</button>
+    </div>
+
+    <div class="dash">
+      <section class="card">
+        <h2>Print job <small id="pct">0%</small></h2>
+        <div class="body">
+          <div class="file">alignment_test_cube.gcode</div>
+          <div class="bar"><i id="bar"></i></div>
+          <div class="kv">
+            <div><span>Layer</span><b id="d-layer">1 / 100</b></div>
+            <div><span>Elapsed</span><b id="d-time">0:00</b></div>
+            <div><span>Toolchanges</span><b id="d-changes">0</b></div>
+          </div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Toolhead <small id="d-state">Ready</small></h2>
+        <div class="body">
+          <div class="kv">
+            <div><span>X</span><b id="d-x">—</b></div>
+            <div><span>Y</span><b id="d-y">—</b></div>
+            <div><span>Z</span><b id="d-z">—</b></div>
+            <div><span>Active tool</span><b id="d-tool">—</b></div>
+            <div><span>Velocity</span><b id="d-v">0 mm/s</b></div>
+            <div><span>Prime tower</span><b id="d-purge">0 mm³</b></div>
+          </div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Tools</h2>
+        <div class="body"><table><thead><tr><th>Tool</th><th>Carriage X</th><th>State</th></tr></thead><tbody id="tools"></tbody></table></div>
+      </section>
+      <section class="card">
+        <h2>Last toolchange <small id="tc-time">—</small></h2>
+        <div class="body"><table><thead><tr><th>Axis</th><th>From → to</th><th>Peak</th><th>Start</th></tr></thead><tbody id="tc"></tbody></table></div>
+      </section>
+      <section class="card wide">
+        <h2>Console</h2>
+        <pre class="console" id="console" aria-live="off"></pre>
+      </section>
+    </div>
+    <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower.</p>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+// ---------- machine facts measured from the CAD export (mm, world: x across, y up, z front(-)/back(+)) ----------
+// The current export sits at (-0.56, +37.01, +364) mm from this frame; the CAD pipeline shifts it back (pack.mjs OFFSET).
+// Seen from the front, +x is on the viewer's left, so "sx" = -x is the left-to-right screen coordinate.
+const HEAD_IDS = ["NAUO10", "NAUO11", "NAUO16", "NAUO17"];   // Tool 0..3, left to right from the front
+const SX0 = [-347.5, -291.5, 234.5, 290.5];                     // their nozzle sx in the export
+const PRINT_SX0 = -178.5;                                       // printer X = 0 (left edge of the 300 mm print area) in sx
+// ---------- the printer's configuration (printer_data/config: printer.cfg, cp_macro.cfg) ----------
+const LIMITS = { v: 500, a: 10000, scv: 5, vz: 20, az: 500 };   // [printer] max_velocity, max_accel, square_corner_velocity, max_z_*
+const X_PARK_L = [-169, -112.75, -56.5], X_PARK_R = [356.5, 412.75, 469];   // Qdock carriage positions (printer X) the macros park at
+const LP = X_PARK_L.map((x) => x + PRINT_SX0);                  // left Qdock slots L1..L3 (Tool 0, 1, 2) in sx
+const RP = X_PARK_R.map((x) => x + PRINT_SX0);                  // right Qdock slots R1..R3 (Tool 1, 2, 3) in sx
+// zero_T1 ... three_T2: SET_VELOCITY_LIMIT ACCEL=7000, G1 Z+0.4, QUADRO_PARALLEL_MOVE ... Z=start+3 SPEED=350 ARRIVING=Tn
+const TC = { speed: 350, accel: 7000, hopPre: 0.4, hop: 3 };
+// Some macros send the arriving tool 10 mm short of the slicer's X (zero_T3, one_T3: +10; two_T0, three_T0: -10).
+const APPROACH = { "0>3": 10, "1>3": 10, "2>0": -10, "3>0": -10 };
+// Prime tower (slicer side, not in the printer config): OrcaSlicer defaults, 35 mm wide and 45 mm³ per toolchange.
+const PURGE_VOL = 45;
+const NOZZLE_Z = 176.15, PRINT_Z0 = 174.2, PEI_TOP = 31.0, NOZZLE_DROP = 14.2;
+const BED_IDS = ["NAUO267", "NAUO343", "NAUO345", "NAUO336"];                     // bed, Y carriages, belt clamp
+const Z_IDS = ["NAUO3", "NAUO178", "NAUO193", "NAUO196", "NAUO197", "NAUO177", "NAUO194"];   // X axis, Z carriers, bearings, lead-screw nuts
+const COLORS = ["#2f7fe6", "#e5484d", "#2fa868", "#f2c230"];   // Tool 0 blue, 1 red, 2 green, 3 yellow
+const LCD_ID = "NAUO266";
+// The screen hinges on its gear (axis along x); users tilt it to 45 degrees.
+const LCD_HINGE = [-30.5, 51.5], LCD_TILT = 45;
+// Qdock nozzle closers: spring-loaded silicone caps, one per slot, pressed down when a nozzle parks on them.
+const CAP_PAIRS = [["NAUO73", "NAUO74"], ["NAUO79", "NAUO78"], ["NAUO81", "NAUO80"], ["NAUO66", "NAUO61"], ["NAUO62", "NAUO63"], ["NAUO65", "NAUO64"]];
+const CAP_PRESS = 2.5, CAP_REACH = 8;                              // mm of travel, mm from the cap centre where the dome is touched
+// The head cable plug floats 20 mm above its socket in the export; seat it.
+const PLUG_DROP = 15;
+// Spools on the holder arms and the PTFE / cable runs (world mm). Left from the front = +x.
+const SPOOL_X = { left: 272, right: -215 }, SPOOL_W = 64, SPOOL_R = 100, CORE_R = 80;
+const SPOOLS = [                                                   // tool -> side, arm height and depth
+  { side: "left", y: 336, z: 440 }, { side: "left", y: 90, z: 426 },
+  { side: "right", y: 90, z: 426 }, { side: "right", y: 336, z: 440 },
+];
+// Four holes on top of each X side cover (measured from the CAD mesh): the middle two take PTFE, the outer two the head cables.
+const COVER_HOLES = {
+  left: { top: 123.5, x: 404.0, cx: 402.9, ptfe: [229.4, 251.0], cable: [211.5, 268.9] },
+  right: { top: 123.5, x: -347.0, cx: -345.8, ptfe: [229.5, 251.0], cable: [211.5, 268.9] },
+};
+const COVER_BOTTOM = 27;                                          // underside of the side covers
+const HOLDER_PTFE = [[307, 205, 365], [227, 205, 365], [-250, 205, 365], [-170, 205, 365]];
+const INLET = [189, 176], PLUG = [192, 210];
+// Screen glass of the 4.3" display and the logo printed on the PEI sheet.
+const LCD_GLASS = { x0: -290, x1: -176, y0: -64, y1: 12, z: 32.6 };
+// The printed artwork on the textured PEI sheet: white, one colour, laid out as on the production plate.
+const PEI_SHEET = { x0: -124, x1: 181, z0: 159.7, z1: 488.7 };   // sheet outline in the export (mm), front edge at z0
+
+// ---------- print job: the "Alignment Test Cube" (Snapmaker Space, CC0), rebuilt from its pictures ----------
+// A 20 mm cube of 2 x 2 blocks (10 mm) in 4 tiers (5 mm). Every tier holds all four colours; they rotate tier to tier.
+const CUBE = 20, BLOCK = 10, TIER = 5, LAYER_H = 0.2, LINE_W = 0.45;
+const LAYERS = Math.round(CUBE / LAYER_H), PER_TIER = Math.round(TIER / LAYER_H);
+const CUBE_X0 = 140, CUBE_Y0 = 140;                              // cube corner in bed coordinates (centred on the 300 mm bed)
+const QUADS = [[0, 0], [1, 0], [1, 1], [0, 1]];                  // the 2 x 2 grid, walked round
+const toolAt = (tier, q) => (q + tier) % 4;
+const quadOf = (tier, tool) => (tool - tier + 4) % 4;
+function blockPath(q, layer) {
+  const [qx, qy] = QUADS[q], x0 = CUBE_X0 + qx * BLOCK, y0 = CUBE_Y0 + qy * BLOCK, pts = [];
+  for (const inset of [LINE_W / 2, LINE_W * 1.5]) {               // two perimeters
+    const a = x0 + inset, b = x0 + BLOCK - inset, c = y0 + inset, d = y0 + BLOCK - inset;
+    pts.push([a, c], [b, c], [b, d], [a, d], [a, c]);
+  }
+  const lo = LINE_W * 2.5, n = Math.floor((BLOCK - 2 * lo) / LINE_W) + 1;
+  for (let i = 0; i < n; i++) {                                   // rectilinear infill, direction alternates by layer
+    const t = lo + i * LINE_W, [u, v] = i % 2 ? [BLOCK - lo, lo] : [lo, BLOCK - lo];
+    if (layer % 2 === 0) pts.push([x0 + t, y0 + u], [x0 + t, y0 + v]); else pts.push([x0 + u, y0 + t], [x0 + v, y0 + t]);
+  }
+  return pts;
+}
+// Order of tools in a layer: carry on with the tool that finished the last layer, then the others in turn.
+function layerJobs(layer, first) {
+  const tier = Math.floor(layer / PER_TIER), start = first < 0 ? 0 : first;
+  return [0, 1, 2, 3].map((k) => (start + k) % 4).map((tool) => ({ tool, q: quadOf(tier, tool) }));
+}
+const lengthOf = (p) => p.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
+const pointAlong = (p, d) => { for (let i = 1; i < p.length; i++) { const L = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (d <= L) { const f = L ? d / L : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * f, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * f]; } d -= L; } return p[p.length - 1]; };
+
+const TOWER = { x0: 12, y0: 255, w: 35 };                        // back left corner of the bed (printer X, Y)
+const BAND_D = Math.ceil(PURGE_VOL / (LINE_W * LAYER_H * TOWER.w)) * LINE_W;   // one toolchange's purge, mm deep
+// travel: PHYS_TOOL_n ends with G1 F18000, so moves after a toolchange run at 300 mm/s until the slicer sets a feed
+const cfg = { tcSpeed: TC.speed, tcAccel: TC.accel, travel: 300, accel: LIMITS.a, print: 350, scale: 1 };
+let sx = [LP[0], LP[1], RP[1], RP[2]], ny = 2, hop = 0, active = -1, phase = { kind: "idle" };
+let layer = 0, jobs = layerJobs(0, -1), jobAt = 0, done = new Set(), stats = { changes: 0, time: 0, purge: 0 };
+let playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+const fmt = (v, n = 0) => (Math.abs(v) < 0.5 * 10 ** -n ? 0 : v).toFixed(n);
+
+// ---------- three.js scene ----------
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(-1, 2, -1.5); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8a8a, 0.6));
+const camera = new THREE.PerspectiveCamera(32, 4 / 3, 0.01, 20);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08; controls.minDistance = 0.25; controls.maxDistance = 4;
+controls.addEventListener("change", () => (dirty = true));
+let dirty = true, ready = false;
+
+function resize() {
+  const { width, height } = stage.getBoundingClientRect();
+  renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); dirty = true;
+}
+new ResizeObserver(resize).observe(stage);
+
+// colour parts from their CAD names
+const MAT = {
+  head: new THREE.MeshStandardMaterial({ color: 0x25282c, roughness: 0.55, metalness: 0.1 }),
+  dock: new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.2 }),
+  alu: new THREE.MeshStandardMaterial({ color: 0xd4d7da, roughness: 0.38, metalness: 0.55 }),
+  rail: new THREE.MeshStandardMaterial({ color: 0x8e949a, roughness: 0.28, metalness: 0.9 }),
+  motor: new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.45, metalness: 0.5 }),
+  cap: new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.1 }),
+  shell: new THREE.MeshStandardMaterial({ color: 0xe8e9eb, roughness: 0.6, metalness: 0 }),
+  pei: new THREE.MeshStandardMaterial({ color: 0xcaa452, roughness: 0.82, metalness: 0.3 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x303236, roughness: 0.6, metalness: 0.2 }),
+  lcd: new THREE.MeshStandardMaterial({ color: 0x131416, roughness: 0.35, metalness: 0.15 }),
+  pulley: new THREE.MeshStandardMaterial({ color: 0xc4c8cc, roughness: 0.4, metalness: 0.35 }),
+  other: new THREE.MeshStandardMaterial({ color: 0xa3a7ac, roughness: 0.45, metalness: 0.4 }),
+};
+function materialFor(path) {
+  const p = path.toLowerCase().replace(/_/g, " ");          // three.js turns spaces in node names into "_"
+  if (p.includes("toolhead")) return MAT.head;
+  if (p.includes("lcd")) return /a30/.test(p) ? MAT.lcd : MAT.shell;   // white housing front and back, black display panel
+  if (p.includes("pei sheet") && !p.includes("magnet")) return MAT.pei;
+  if (p.includes("yan-kapak")) return MAT.dock;
+  if (p.includes("mgn")) return MAT.rail;
+  if (/nema|17hs|ldo|motor/.test(p)) return MAT.motor;
+  if (/kule-kapak|z-alt/.test(p)) return MAT.shell;             // white covers at the foot of the Z towers
+  if (/corner-pin|magnet/.test(p)) return MAT.cap;
+  if (/alu-profile|alu-ext|z-axis-alu|x-alu|y-alu/.test(p)) return MAT.alu;
+  if (/inject|kapak|cover|kasa|filament|heated|move face|fillet|lcd/.test(p)) return MAT.shell;
+  if (/pulley|idler|kasnak|bearing/.test(p)) return MAT.pulley;   // aluminium pulleys and idlers
+  if (/screw|vida/.test(p)) return MAT.dark;
+  return MAT.other;
+}
+
+const byId = {};
+const zGroup = new THREE.Group(), bedGroup = new THREE.Group(), headGroups = [0, 1, 2, 3].map(() => new THREE.Group());
+let center = new THREE.Vector3(), radius = 1;
+const trails = new THREE.Group();
+bedGroup.add(trails);
+
+const plugs = [], caps = [];
+// move an object by a world-space offset (mm), whatever its parent's frame
+function nudge(obj, dx, dy, dz) {
+  obj.updateWorldMatrix(true, false);
+  const w = new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld).add(new THREE.Vector3(dx / 1000, dy / 1000, dz / 1000));
+  obj.position.copy(obj.parent.worldToLocal(w));
+}
+const v3 = (x, y, z) => new THREE.Vector3(x / 1000, y / 1000, z / 1000);
+// Draw the plate artwork into a canvas (4 px per mm, top of the canvas = back of the bed) and lay it on the sheet.
+async function addPeiArt() {
+  const W = PEI_SHEET.x1 - PEI_SHEET.x0, H = PEI_SHEET.z1 - PEI_SHEET.z0, K = 4;
+  const cv = document.createElement("canvas"); cv.width = Math.round(W * K); cv.height = Math.round(H * K);
+  const g = cv.getContext("2d"); g.scale(K, K);
+  const ink = "rgba(255,255,255,0.92)", font = (w, px) => w + " " + px + "px Poppins, ui-sans-serif, system-ui, sans-serif";
+  try { await Promise.all(["400", "500", "600"].map((w) => document.fonts.load(font(w, 10)))); } catch {}
+  // the Co Print logo, recoloured white
+  const svg = (await (await fetch("logo.svg")).text()).replace(/#[0-9a-fA-F]{6}/g, "#ffffff");
+  const logo = await new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = reject; im.src = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })); });
+  const drawLogo = (cx, cy, w) => { const h = w * logo.height / logo.width; g.drawImage(logo, cx - w / 2, cy - h / 2, w, h); };
+  g.fillStyle = ink; g.strokeStyle = ink; g.textBaseline = "middle"; g.lineJoin = "round";
+  const tri = (x, y, s) => { g.beginPath(); g.moveTo(x, y - s * 0.6); g.lineTo(x + s * 0.6, y + s * 0.45); g.lineTo(x - s * 0.6, y + s * 0.45); g.closePath(); g.fill(); };
+  const text = (t, x, y, w, px, align = "left", spacing = 0) => { g.font = font(w, px); g.textAlign = align; g.letterSpacing = spacing + "px"; g.fillText(t, x, y); };
+  // textured PEI: a fine scatter of bright and dark grains under the print
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  for (let i = 0; i < 90000; i++) {
+    const x = Math.random() * cv.width, y = Math.random() * cv.height, light = Math.random() < 0.55;
+    g.fillStyle = light ? "rgba(255,240,200," + (0.06 + Math.random() * 0.12) + ")" : "rgba(60,45,20," + (0.05 + Math.random() * 0.1) + ")";
+    g.fillRect(x, y, 1.6, 1.6);
+  }
+  g.restore();
+  g.fillStyle = ink;
+  // centre: logo and QUADRO
+  drawLogo(W / 2, 142, 62);
+  text("QUADRO", W / 2, 163, "600", 21, "center", 0.6);
+  // back tab: nozzle cleaning area
+  text("Keep Clean", W / 2, 11.5, "400", 2.6, "center"); tri(W / 2 - 16, 11.2, 3); tri(W / 2 + 16, 11.2, 3);
+  g.lineWidth = 0.45; g.strokeRect(W / 2 - 35, 15.8, 70, 5);
+  text("Nozzle Cleaning Area", W / 2, 18.4, "400", 3, "center"); tri(W / 2 - 30, 18.3, 2.6); tri(W / 2 + 30, 18.3, 2.6);
+  // back right: calibration station
+  g.lineWidth = 0.5; g.beginPath(); g.arc(234, 17.5, 2.6, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(234, 17.5, 4.2, -0.9, 0.9); g.stroke(); g.beginPath(); g.arc(234, 17.5, 4.2, Math.PI - 0.9, Math.PI + 0.9); g.stroke();
+  text("360° Calibration Station", 240, 16.2, "500", 3.4); text("Toolhead Sync Calibration", 240, 20, "400", 2.4); tri(292, 17.5, 3.2);
+  // front left: hot surface
+  g.lineWidth = 0.55; g.beginPath(); g.moveTo(17, 296); g.lineTo(23, 306); g.lineTo(11, 306); g.closePath(); g.stroke();
+  for (const dx of [-2, 0, 2]) { g.beginPath(); g.moveTo(17 + dx, 304.5); g.bezierCurveTo(17 + dx - 1, 303, 17 + dx + 1, 301.5, 17 + dx, 300); g.stroke(); }
+  text("Caution:", 26, 299.5, "400", 3.4); text("Hot Surface!", 26, 304, "400", 3.4);
+  // front right: plate spec
+  text("300x300mm", 294, 289.5, "400", 3, "right"); text("Textured PEI Plate", 294, 294.5, "600", 5.2, "right");
+  g.lineWidth = 0.4; g.strokeRect(266, 300.4, 28, 3.8); text("PLA/ABS/PETG/TPU", 280, 302.4, "400", 2.5, "center");
+  for (let i = 0; i < 7; i++) { g.beginPath(); g.moveTo(240 + i * 3.4, 304); g.lineTo(242 + i * 3.4, 300.6); g.lineWidth = 1; g.stroke(); }
+  // front tab: small logo
+  drawLogo(W / 2, 318, 27);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const art = new THREE.Mesh(new THREE.PlaneGeometry(W / 1000, H / 1000), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetUnits: -4 }));   // units only: a slope factor pulls the art through the head and print at grazing angles
+  art.rotation.set(-Math.PI / 2, 0, Math.PI);                     // lie flat; canvas top towards the back, readable from the front
+  art.position.copy(v3((PEI_SHEET.x0 + PEI_SHEET.x1) / 2, PEI_TOP + 0.15, (PEI_SHEET.z0 + PEI_SHEET.z1) / 2));
+  bedGroup.add(art); dirty = true; run();
+}
+function addSpools() {
+  const flange = new THREE.MeshStandardMaterial({ color: 0xcdb48e, roughness: 0.8 });
+  const hub = new THREE.MeshStandardMaterial({ color: 0xf1efe9, roughness: 0.6 });
+  SPOOLS.forEach((sp, j) => {
+    const g = new THREE.Group(), xc = SPOOL_X[sp.side];
+    const disc = (r, w, mat) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r / 1000, r / 1000, w / 1000, 64), mat); m.rotation.z = Math.PI / 2; return m; };
+    const f1 = disc(SPOOL_R, 4, flange), f2 = disc(SPOOL_R, 4, flange);
+    f1.position.x = -(SPOOL_W / 2 - 2) / 1000; f2.position.x = (SPOOL_W / 2 - 2) / 1000;
+    g.add(f1, f2, disc(CORE_R, SPOOL_W - 8, new THREE.MeshStandardMaterial({ color: COLORS[j], roughness: 0.5 })), disc(28, SPOOL_W + 2, hub));
+    g.position.copy(v3(xc, sp.y, sp.z));
+    scene.add(g);
+  });
+}
+// PTFE tube (clear, with the coloured filament inside) and head cable for each tool, rebuilt when the head moves
+const runs = [];
+const ptfeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.38, roughness: 0.15, depthWrite: false });
+const cableMat = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.6 });
+function buildRuns() {
+  for (let j = 0; j < 4; j++) {
+    const fil = new THREE.MeshStandardMaterial({ color: COLORS[j], roughness: 0.4 });
+    const r = { ptfe: new THREE.Mesh(undefined, ptfeMat), fil: new THREE.Mesh(undefined, fil), cable: new THREE.Mesh(undefined, cableMat), key: "" };
+    scene.add(r.ptfe, r.fil, r.cable); runs.push(r);
+  }
+  addGrommets();
+  scene.add(bedCable);
+  updateRuns();
+}
+// rubber grommets and brass push-fits where cables and PTFE enter the side covers and the head tops
+function addGrommets() {
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.7 }), brass = new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.3, metalness: 0.85 });
+  const ring = (parent, x, y, z, r, t, m, oval = 1) => { const o = new THREE.Mesh(new THREE.TorusGeometry(r / 1000, t / 1000, 10, 28), m); o.rotation.x = -Math.PI / 2; o.scale.x = oval; o.position.copy(v3(x, y, z)); parent.add(o); };
+  const fit = (parent, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 24, 1, true), brass); o.position.copy(v3(x, y + 1.5, z)); parent.add(o); ring(parent, x, y + 3.5, z, 4.5, 0.9, brass); };
+  for (const H of Object.values(COVER_HOLES)) {
+    for (const z of H.ptfe) fit(zGroup, H.x, H.top, z);
+    for (const z of H.cable) ring(zGroup, H.cx, H.top + 0.6, z, 4.6, 1.3, rubber, 1.35);
+  }
+  headGroups.forEach((g, j) => {
+    const hx = -SX0[j];
+    ring(g, hx, 187.6, INLET[1], 4.2, 1.1, rubber);
+    ring(g, hx, 187.6, PLUG[1], 5, 1.3, rubber, 1.4);
+  });
+}
+// the heated bed's braided cable: from the strain relief at the back of the bed, looping down into the base
+const bedCable = new THREE.Mesh(undefined, new THREE.MeshStandardMaterial({ color: 0x18191b, roughness: 0.85 }));
+const BED_RELIEF = [130, 19.6, 521], BASE_ENTRY = [118, -28, 425];
+let bedCableKey = "";
+function updateBedCable() {
+  const tz = bedGroup.position.z * 1000, key = tz.toFixed(1);
+  if (key === bedCableKey) return;
+  bedCableKey = key;
+  const [bx, by, bz] = BED_RELIEF, [ex, ey, ez] = BASE_ENTRY, z0 = bz + tz;
+  const sag = Math.max(ez + 40, z0 + 45);
+  tube(bedCable, [v3(bx, by, z0), v3(bx, by - 2, z0 + 25), v3((bx + ex) / 2, (by + ey) / 2 - 20, sag), v3(ex, ey + 8, ez + 30), v3(ex, ey, ez)], 4.5);
+}
+function tube(mesh, pts, radius) {
+  const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+  mesh.geometry?.dispose();
+  mesh.geometry = new THREE.TubeGeometry(curve, 90, radius / 1000, 8, false);
+}
+function updateRuns() {
+  const z = zGroup.position.y * 1000;
+  runs.forEach((r, j) => {
+    const hx = -sx[j], key = hx.toFixed(1) + "|" + z.toFixed(1);
+    if (r.key === key) return;
+    r.key = key;
+    const sp = SPOOLS[j], side = sp.side, s = side === "left" ? 1 : -1;
+    const H = COVER_HOLES[side], k = j % 2, [hpx, hpy, hpz] = HOLDER_PTFE[j];
+    const ex = H.x, ey = H.top, ez = H.ptfe[k], cx = H.cx, cz = H.cable[k];
+    const xs = SPOOL_X[side], feed = v3(xs, sp.y > 200 ? sp.y - 90 : sp.y + 92, sp.z - 45);
+    const mid = (hx + ex) / 2;
+    const ptfe = [
+      v3(hx, INLET[0] + z, INLET[1]), v3(hx, INLET[0] + 45 + z, INLET[1] + 4),
+      v3(mid, INLET[0] + 75 + z, 205), v3(ex, ey + 45 + z, ez), v3(ex, ey + z, ez),
+      // straight down through the side cover, out of its underside directly below the entry
+      v3(ex, ey - 50 + z, ez), v3(ex, COVER_BOTTOM + z, ez), v3(ex, COVER_BOTTOM - 25 + z, ez + 8),
+      v3(ex + s * 15, COVER_BOTTOM - 30 + z, ez + 60), v3(hpx, hpy - 70, hpz - 25), v3(hpx, hpy - 25, hpz), v3(hpx, hpy, hpz), feed,
+    ];
+    tube(r.ptfe, ptfe, 2.0); tube(r.fil, ptfe, 0.9);
+    const cable = [
+      v3(hx, PLUG[0] + z, PLUG[1]), v3(hx, PLUG[0] + 35 + z, PLUG[1] + 6),
+      v3(mid, INLET[0] + 62 + z, (PLUG[1] + cz) / 2), v3(cx, ey + 40 + z, cz), v3(cx, ey + z, cz), v3(cx, ey - 12 + z, cz),
+    ];
+    tube(r.cable, cable, 2.4);
+  });
+}
+function pressCaps() {
+  for (const c of caps) {
+    let press = 0;
+    for (let j = 0; j < 4; j++) {
+      const d = Math.abs(-sx[j] - c.x), t = Math.min(1, Math.max(0, (CAP_REACH - d) / (CAP_REACH - 3)));
+      press = Math.max(press, CAP_PRESS * t * t * (3 - 2 * t));
+    }
+    c.group.position.y = -press / 1000;
+  }
+}
+
+// On claude.ai the model ships as base64 text (artifacts serve text, not .glb); the GitHub Pages build serves quadro.glb as is.
+const MODEL_URL = "quadro.glb";
+async function loadModel() {
+  const res = await fetch(MODEL_URL);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const total = Number(res.headers.get("content-length")) || 0, reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    if (total) document.getElementById("loading").textContent = "Loading model… " + Math.round((got / total) * 100) + "%";
+  }
+  let buffer = await new Blob(parts).arrayBuffer();
+  if (!/\.glb$|^data:/.test(MODEL_URL)) {
+    const bin = atob(new TextDecoder().decode(buffer).trim()), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    buffer = bytes.buffer;
+  }
+  return new Promise((resolve, reject) => new GLTFLoader().parse(buffer, "", resolve, reject));
+}
+loadModel().then((gltf) => {
+  const root = gltf.scene;
+  scene.add(root, zGroup, bedGroup);
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    // ids come from the file's own node names ("NAUO78:part"); three.js strips the ":" from o.name
+    const at = gltf.parser.associations.get(o);
+    const raw = at && at.nodes !== undefined ? gltf.parser.json.nodes[at.nodes].name || "" : "";
+    const id = raw.split(":")[0]; if (id && !byId[id]) byId[id] = o;
+    if (o.isMesh) {
+      let path = "", n = o;
+      while (n) { path += " " + n.name; n = n.parent; }
+      o.material = materialFor(path);
+    }
+  });
+  if (byId[LCD_ID]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(0, LCD_HINGE[0] / 1000, LCD_HINGE[1] / 1000);
+    scene.add(pivot); pivot.updateMatrixWorld(true);
+    pivot.attach(byId[LCD_ID]);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry((LCD_GLASS.x1 - LCD_GLASS.x0) / 1000, (LCD_GLASS.y1 - LCD_GLASS.y0) / 1000), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+    glass.position.copy(v3((LCD_GLASS.x0 + LCD_GLASS.x1) / 2, (LCD_GLASS.y0 + LCD_GLASS.y1) / 2, LCD_GLASS.z));
+    glass.rotation.y = Math.PI;                                     // face the front (-z)
+    scene.add(glass); pivot.attach(glass);
+    new THREE.TextureLoader().load("screen.png", (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; glass.material = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }); dirty = true; run(); });
+    pivot.rotation.x = THREE.MathUtils.degToRad(90 - LCD_TILT);
+  }
+  const box = new THREE.Box3().setFromObject(scene);
+  box.getCenter(center); radius = box.getSize(new THREE.Vector3()).length() / 2;
+  addSpools();
+  addPeiArt().catch(() => {});
+  for (const id of BED_IDS) if (byId[id]) bedGroup.attach(byId[id]);
+  for (const id of Z_IDS) if (byId[id]) zGroup.attach(byId[id]);
+  headGroups.forEach((g, j) => {
+    zGroup.add(g);
+    const head = byId[HEAD_IDS[j]];
+    // each tool gets its own materials so the printing one can glow, plus an LED strip like the real cover
+    head.traverse((o) => { if (o.isMesh) o.material = o.material.clone(); });
+    g.attach(head);
+    const hb = new THREE.Box3().setFromObject(head);
+    const led = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.003, 0.0008), new THREE.MeshBasicMaterial({ color: COLORS[j] }));
+    led.position.set((hb.min.x + hb.max.x) / 2, hb.max.y - 0.032, hb.min.z - 0.0005);
+    g.add(led);
+    head.traverse((o) => { if (!plugs[j] && /kablo/i.test(o.name)) plugs[j] = o; });
+    if (plugs[j]) nudge(plugs[j], 0, -PLUG_DROP, 0);
+  });
+  for (const pair of CAP_PAIRS) {
+    const parts = pair.map((id) => byId[id]).filter(Boolean);
+    if (!parts.length) continue;
+    const cg = new THREE.Group(); zGroup.add(cg);
+    const cb = new THREE.Box3();
+    for (const part of parts) { cb.expandByObject(part); cg.attach(part); }
+    caps.push({ group: cg, x: ((cb.min.x + cb.max.x) / 2) * 1000 });
+  }
+  buildRuns();
+  addRoom();
+  ready = true;
+  document.getElementById("loading").remove();
+  setView("room", true);
+  setActive(-1);
+  draw();
+  run();
+}).catch((err) => {
+  document.getElementById("loading").textContent = "Could not load the model: " + err.message;
+});
+
+function setActive(j) {
+  headGroups.forEach((g, k) => g.traverse((o) => {
+    if (o.isMesh && o.material.emissive) { o.material.emissive.set(k === j ? 0x5a6068 : 0x000000); o.material.emissiveIntensity = k === j ? 0.35 : 0; }
+  }));
+}
+
+// ---------- views ----------
+// ---------- the hobby room: a standard IKEA desk and a few things for scale ----------
+// LINNMON 150 x 75 cm tabletop on ADILS legs, 74 cm high. Everything else is a stand-in for scale.
+const DESK = { w: 1.5, d: 0.75, t: 0.025, h: 0.74, shift: -0.06 };   // shift: desk centre relative to the printer (-x = towards the laptop side)
+const roomGroup = new THREE.Group();
+let roomCenter = new THREE.Vector3();
+function mat(color, roughness = 0.6, metalness = 0) { return new THREE.MeshStandardMaterial({ color, roughness, metalness }); }
+function box(w, h, d, m, x, y, z) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); roomGroup.add(o); return o; }
+function cyl(r0, r1, h, m, x, y, z, seg = 32) { const o = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), m); o.position.set(x, y, z); roomGroup.add(o); return o; }
+function textPlane(lines, w, color = "#1b1c1e") {
+  const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 256 * lines.length;
+  const g = cv.getContext("2d"); g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "middle";
+  lines.forEach((t, i) => { g.font = (i ? "500 120px " : "400 92px ") + "Poppins, ui-sans-serif, system-ui, sans-serif"; g.fillText(t, 512, 128 + i * 256); });
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, w * cv.height / cv.width), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false }));
+}
+// bounds of what is drawn (the hidden print blocks are 1 m tall until they grow)
+function visibleBox(root) {
+  const b = new THREE.Box3(); root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    let v = o.visible, n = o.parent; while (v && n) { v = n.visible; n = n.parent; }
+    if (o.isMesh && v) b.union(new THREE.Box3().setFromObject(o, false));
+  });
+  return b;
+}
+function rod(a, b, r, m) {                                         // a cylinder from point a to point b
+  const d = new THREE.Vector3().subVectors(b, a), o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 16), m);
+  o.position.copy(a).addScaledVector(d, 0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); roomGroup.add(o); return o;
+}
+function addRoom() {
+  // footprint of the printer, spools included, with the bed at both ends of its travel
+  const all = visibleBox(scene), bed = visibleBox(bedGroup);
+  const travel = 0.3;
+  const fp = { x0: all.min.x, x1: all.max.x, z0: Math.min(all.min.z, bed.min.z - travel), z1: Math.max(all.max.z, bed.max.z) };
+  const top = all.min.y, floor = top - DESK.h, cx = (fp.x0 + fp.x1) / 2 + DESK.shift, cz = (fp.z0 + fp.z1) / 2;
+  const dk = { x0: cx - DESK.w / 2, x1: cx + DESK.w / 2, z0: cz - DESK.d / 2, z1: cz + DESK.d / 2 };
+  roomCenter.set(cx, top + 0.1, cz);
+  // desk
+  box(DESK.w, DESK.t, DESK.d, mat(0xf3f2ee, 0.55), cx, top - DESK.t / 2, cz);
+  const legM = mat(0xe9e9e6, 0.4, 0.3);
+  for (const [x, z] of [[dk.x0 + 0.06, dk.z0 + 0.06], [dk.x1 - 0.06, dk.z0 + 0.06], [dk.x0 + 0.06, dk.z1 - 0.06], [dk.x1 - 0.06, dk.z1 - 0.06]]) cyl(0.018, 0.015, DESK.h - DESK.t, legM, x, floor + (DESK.h - DESK.t) / 2, z);
+  // floor and back wall
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), mat(0xc9b393, 0.75)); fl.rotation.x = -Math.PI / 2; fl.position.set(cx, floor, cz); roomGroup.add(fl);
+  const wallZ = dk.z1 + 0.22;
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(8, 2.8), mat(0xe8e5de, 0.9)); wall.rotation.y = Math.PI; wall.position.set(cx, floor + 1.4, wallZ); roomGroup.add(wall);
+  // pegboard with a few tools, and a wall shelf of spare spools
+  const peg = document.createElement("canvas"); peg.width = 512; peg.height = 320;
+  const pg = peg.getContext("2d"); pg.fillStyle = "#cfc6b4"; pg.fillRect(0, 0, 512, 320); pg.fillStyle = "#8f866f";
+  for (let y = 10; y < 320; y += 20) for (let x = 10; x < 512; x += 20) { pg.beginPath(); pg.arc(x, y, 3, 0, Math.PI * 2); pg.fill(); }
+  const pegTex = new THREE.CanvasTexture(peg); pegTex.colorSpace = THREE.SRGBColorSpace;
+  const board = box(0.9, 0.56, 0.012, new THREE.MeshStandardMaterial({ map: pegTex, roughness: 0.85 }), dk.x0 + 0.5, top + 0.85, wallZ - 0.01);
+  board.rotation.y = Math.PI;
+  const tools = [[0xe5484d, 0.16], [0x2f7fe6, 0.2], [0xf2c230, 0.14], [0x1b1c1e, 0.24], [0x2fa868, 0.18]];
+  tools.forEach(([c, len], i) => { box(0.022, len, 0.022, mat(c, 0.5), dk.x0 + 0.2 + i * 0.13, top + 0.92 - len / 2, wallZ - 0.03); });
+  box(0.9, 0.018, 0.2, mat(0xf3f2ee, 0.55), dk.x1 - 0.5, top + 1.05, wallZ - 0.1);
+  [0xe5484d, 0x2fa868, 0xf2c230, 0x2f7fe6, 0xd9d4c7].forEach((c, i) => spool(dk.x1 - 0.86 + i * 0.16, top + 1.059 + 0.09, wallZ - 0.1, c, 0.09));
+  // desk lamp (left back), laptop (right), mug, two spare spools, office chair
+  const lampX = dk.x1 - 0.12, lampZ = dk.z1 - 0.1, dark = mat(0x26282b, 0.45, 0.4);
+  cyl(0.065, 0.07, 0.02, dark, lampX, top + 0.01, lampZ);
+  const p0 = new THREE.Vector3(lampX, top + 0.02, lampZ), p1 = new THREE.Vector3(lampX, top + 0.42, lampZ - 0.08), p2 = new THREE.Vector3(lampX + 0.02, top + 0.36, lampZ - 0.36);
+  rod(p0, p1, 0.008, dark); rod(p1, p2, 0.008, dark);
+  const head = cyl(0.022, 0.055, 0.09, dark, p2.x, p2.y - 0.035, p2.z); head.rotation.x = 0.35;
+  laptop(dk.x0 + 0.18, top, dk.z0 + 0.2);
+  mug(dk.x1 - 0.14, top, dk.z0 + 0.16);
+  spool(dk.x0 + 0.14, top, dk.z1 - 0.15, 0x2fa868, 0.1, true); spool(dk.x0 + 0.14, top + 0.068, dk.z1 - 0.15, 0xe9e6df, 0.1, true);
+  chair(cx + 0.38, floor, dk.z0 - 0.26);
+  // mains cable from the back of the base, over the back edge of the desk to the floor
+  const cord = new THREE.Mesh(undefined, mat(0x18191b, 0.7)); roomGroup.add(cord);
+  tube(cord, [v3(-60, -45, 432), v3(-62, -60, 462), v3(-90, top * 1000 + 3, 520), v3(-120, top * 1000 + 3, dk.z1 * 1000 - 20), v3(-130, top * 1000 - 20, dk.z1 * 1000 + 25), v3(-140, floor * 1000 + 6, dk.z1 * 1000 + 60), v3(-150, floor * 1000 + 3, dk.z1 * 1000 + 160)], 3);
+  const y = top + 0.0008;
+  const deskLabel = textPlane(["IKEA LINNMON desk", "150 × 75 cm"], 0.2, "#6b6d72");
+  deskLabel.rotation.set(-Math.PI / 2, 0, Math.PI); deskLabel.position.set((fp.x1 + dk.x1) / 2 + 0.02, y + 0.0004, cz + 0.05); roomGroup.add(deskLabel);
+  scene.add(roomGroup);
+}
+// a filament spool; standing on its rim (axis along x), or lying on a flange (axis up, y = the surface it rests on)
+function spool(x, y, z, color, r, lying = false) {
+  const g = new THREE.Group(); g.position.set(x, y, z); roomGroup.add(g);
+  const disc = (rr, w, m, off) => {
+    const o = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 48), m);
+    if (lying) o.position.y = 0.033 + off; else { o.rotation.z = Math.PI / 2; o.position.x = off; }
+    g.add(o);
+  };
+  const fl = mat(0xcdb48e, 0.8);
+  disc(r, 0.004, fl, -0.031); disc(r, 0.004, fl, 0.031); disc(r * 0.8, 0.058, mat(color, 0.5), 0); disc(r * 0.28, 0.066, mat(0xf1efe9, 0.6), 0);
+}
+// a ceramic mug: hollow body turned from a wall profile, a handle, and coffee inside
+function mug(x, top, z) {
+  const g = new THREE.Group(); g.position.set(x, top, z); g.rotation.y = 2.6; roomGroup.add(g);   // handle towards the room
+  const P = (r, y) => new THREE.Vector2(r, y);
+  const wall = [P(0, 0), P(0.036, 0), P(0.039, 0.003), P(0.04, 0.012), P(0.04, 0.094), P(0.0385, 0.096), P(0.0365, 0.094), P(0.0355, 0.012), P(0.032, 0.007), P(0, 0.007)];
+  const ceramic = new THREE.MeshStandardMaterial({ color: 0xf6f5f1, roughness: 0.28 });
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(wall, 64), ceramic));
+  const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.0356, 48), new THREE.MeshStandardMaterial({ color: 0x2b1709, roughness: 0.15, metalness: 0.1 }));
+  coffee.rotation.x = -Math.PI / 2; coffee.position.y = 0.078; g.add(coffee);
+  const crema = new THREE.Mesh(new THREE.RingGeometry(0.03, 0.0356, 48), new THREE.MeshStandardMaterial({ color: 0x8a5a33, roughness: 0.4 }));
+  crema.rotation.x = -Math.PI / 2; crema.position.y = 0.0782; g.add(crema);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.025, 0.0065, 14, 32, Math.PI), ceramic);
+  handle.rotation.z = -Math.PI / 2; handle.position.set(0.039, 0.05, 0); g.add(handle);
+}
+function laptop(x, top, z) {
+  const body = mat(0xb9bdc2, 0.35, 0.6), keys = mat(0x2a2c30, 0.6), w = 0.32, d = 0.22, t = 0.016;
+  box(w, t, d, body, x, top + t / 2, z);
+  box(w - 0.03, 0.002, d * 0.48, keys, x, top + t + 0.001, z + 0.03);              // keyboard well
+  box(0.11, 0.0015, 0.065, mat(0xa9adb2, 0.3, 0.5), x, top + t + 0.0008, z - 0.065); // trackpad
+  const hinge = new THREE.Group(); hinge.position.set(x, top + t, z + d / 2 - 0.004); hinge.rotation.x = 0.26; roomGroup.add(hinge);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(w, 0.21, 0.007), body); lid.position.set(0, 0.105, 0); hinge.add(lid);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.025, 0.185), new THREE.MeshBasicMaterial({ color: 0x1f3a5c, toneMapped: false }));
+  disp.position.set(0, 0.108, -0.0037); disp.rotation.y = Math.PI; hinge.add(disp);
+  rod(new THREE.Vector3(x - w / 2 + 0.03, top + t, z + d / 2 - 0.004), new THREE.Vector3(x + w / 2 - 0.03, top + t, z + d / 2 - 0.004), 0.005, keys);   // hinge barrel
+}
+// office chair facing the desk (+z): five-star base on casters, gas lift, seat, backrest on a spine, armrests
+function chair(x, floor, z) {
+  const blk = mat(0x2a2c30, 0.65), metal = mat(0x9a9ea3, 0.35, 0.7), V = (a, b, c) => new THREE.Vector3(a, b, c);
+  const hub = V(x, floor + 0.11, z);
+  cyl(0.045, 0.045, 0.05, metal, x, floor + 0.11, z);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3, ex = x + Math.cos(a) * 0.3, ez = z + Math.sin(a) * 0.3;
+    rod(hub, V(ex, floor + 0.07, ez), 0.016, metal);
+    rod(V(ex, floor + 0.07, ez), V(ex, floor + 0.045, ez), 0.008, metal);
+    const wheel = new THREE.Mesh(new THREE.SphereGeometry(0.026, 20, 14), blk); wheel.position.set(ex, floor + 0.026, ez); roomGroup.add(wheel);
+  }
+  rod(V(x, floor + 0.13, z), V(x, floor + 0.42, z), 0.022, metal);          // gas lift
+  box(0.26, 0.03, 0.26, blk, x, floor + 0.43, z);                             // tilt plate
+  box(0.48, 0.07, 0.46, blk, x, floor + 0.48, z);                             // seat
+  rod(V(x, floor + 0.44, z - 0.12), V(x, floor + 0.5, z - 0.27), 0.022, metal);   // spine
+  rod(V(x, floor + 0.5, z - 0.27), V(x, floor + 0.62, z - 0.28), 0.022, metal);
+  const back = box(0.44, 0.48, 0.055, blk, x, floor + 0.84, z - 0.28); back.rotation.x = -0.1;
+  for (const s of [-1, 1]) {                                                  // armrests
+    rod(V(x + s * 0.225, floor + 0.47, z - 0.02), V(x + s * 0.225, floor + 0.66, z - 0.02), 0.012, metal);
+    box(0.06, 0.025, 0.25, blk, x + s * 0.225, floor + 0.672, z - 0.02);
+  }
+}
+document.getElementById("room-toggle").addEventListener("click", (e) => {
+  roomGroup.visible = !roomGroup.visible; e.target.textContent = roomGroup.visible ? "Hide room" : "Show room"; dirty = true; run();
+});
+
+const VIEWS = { front: [180, 8, 0.95], iso: [215, 22, 1.05], side: [270, 12, 1.05], top: [180, 80, 1.0], dock: [160, 14, 0.5], part: [205, 28, 0.28], room: [205, 16, 2.5] };
+let tween = null;
+function setView(name, instant) {
+  const [az, el, k] = VIEWS[name];
+  const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el), d = name === "dock" || name === "part" || name === "room" ? k : radius * 2.4 * k;
+  const target = name === "dock" ? new THREE.Vector3(0.3, 0.05, 0.18)
+    : name === "room" ? roomCenter.clone()
+    : name === "part" ? new THREE.Vector3(-(PRINT_SX0 + CUBE_X0 + CUBE / 2) / 1000, (PEI_TOP + 12) / 1000, NOZZLE_Z / 1000) : center.clone();
+  const pos = target.clone().add(new THREE.Vector3(Math.sin(a) * Math.cos(e) * d, Math.sin(e) * d, Math.cos(a) * Math.cos(e) * d));
+  if (instant) { camera.position.copy(pos); controls.target.copy(target); controls.update(); dirty = true; return; }
+  tween = { t: 0, p0: camera.position.clone(), p1: pos, t0: controls.target.clone(), t1: target };
+  run();
+}
+
+// ---------- motion: the printer's own rules ----------
+// Klipper's trapezoid (klippy/extras/quadro_parallel_carriage.py make_profile): accelerate, cruise, decelerate.
+function profile(start, target, speed, accel) {
+  const d = Math.abs(target - start), peak = d ? Math.min(speed, Math.sqrt(d * accel)) : 0;
+  const ta = peak ? peak / accel : 0, tc = peak ? Math.max(0, d / peak - ta) : 0;
+  return { start, target, accel, peak, ta, tc, delay: 0, T: 2 * ta + tc };
+}
+function posAt(p, t) {
+  const u = t - p.delay, s = Math.sign(p.target - p.start);
+  if (u <= 0 || !p.peak) return p.start;
+  if (u >= p.T) return p.target;
+  if (u < p.ta) return p.start + s * p.accel * u * u / 2;
+  if (u < p.ta + p.tc) return p.start + s * (p.peak * p.ta / 2 + p.peak * (u - p.ta));
+  const r = p.T - u;
+  return p.target - s * p.accel * r * r / 2;
+}
+// QUADRO_PARALLEL_MOVE "method B": every carriage, Y and Z get their own trapezoid and start at once,
+// except the arriving tool, which leaves late so it lands exactly when the slowest axis finishes.
+function parallelPlan(targets, arriving, y1, z1) {
+  const v = Math.min(cfg.tcSpeed, LIMITS.v), a = cfg.tcAccel;
+  const ps = sx.map((x, j) => profile(x, targets[j], v, a));
+  const py = profile(ny, y1, v, a), pz = profile(hop, z1, Math.min(v, LIMITS.vz), Math.min(a, LIMITS.az));
+  const T = Math.max(py.T, pz.T, ...ps.map((p) => p.T));
+  if (ps[arriving].T) ps[arriving].delay = T - ps[arriving].T;
+  return { ps, py, pz, T };
+}
+// Klipper's lookahead for a polyline: junction speeds from square_corner_velocity, then backward/forward passes.
+// minimum_cruise_ratio smoothing, input shaping and extrusion limits are not modelled.
+function planPath(pts, v, a) {
+  const jd = LIMITS.scv ** 2 * (Math.SQRT2 - 1) / a, segs = [];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i][0] - pts[i - 1][0], dy = pts[i][1] - pts[i - 1][1], L = Math.hypot(dx, dy);
+    if (L > 1e-6) segs.push({ x0: pts[i - 1][0], y0: pts[i - 1][1], ux: dx / L, uy: dy / L, L, max2: 0 });
+  }
+  for (let i = 1; i < segs.length; i++) {
+    const p = segs[i - 1], s = segs[i], c = -(p.ux * s.ux + p.uy * s.uy);
+    if (c > 0.999999) continue;                                     // full reversal: stop
+    const cos = Math.max(c, -0.999999), sd2 = Math.sqrt(0.5 * (1 - cos)), R = sd2 / (1 - sd2), td2 = sd2 / Math.sqrt(0.5 * (1 + cos));
+    s.max2 = Math.min(R * jd * a, 0.5 * s.L * td2 * a, 0.5 * p.L * td2 * a, v * v);
+  }
+  let end2 = 0;
+  for (let i = segs.length - 1; i >= 0; i--) { segs[i].e2 = end2; end2 = segs[i].s2 = Math.min(segs[i].max2, end2 + 2 * a * segs[i].L); }
+  let t = 0, d = 0, prev2 = 0;
+  for (const s of segs) {
+    s.s2 = Math.min(s.s2, prev2); s.e2 = Math.min(s.e2, s.s2 + 2 * a * s.L);
+    const vs = Math.sqrt(s.s2), ve = Math.sqrt(s.e2), vc = Math.sqrt(Math.min(v * v, (s.s2 + s.e2) / 2 + a * s.L));
+    const da = (vc * vc - s.s2) / (2 * a), dd = (vc * vc - s.e2) / (2 * a);
+    Object.assign(s, { vs, ve, vc, a, ta: (vc - vs) / a, tc: Math.max(0, (s.L - da - dd) / vc), td: (vc - ve) / a, da, t0: t, d0: d });
+    t += s.ta + s.tc + s.td; d += s.L; prev2 = s.e2;
+  }
+  return { segs, T: t, L: d };
+}
+function pathAt(plan, t) {
+  let lo = 0, hi = plan.segs.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (plan.segs[m].t0 <= t) lo = m; else hi = m - 1; }
+  const s = plan.segs[lo]; if (!s) return 0;
+  const u = Math.max(0, t - s.t0);
+  let d;
+  if (u < s.ta) d = s.vs * u + s.a * u * u / 2;
+  else if (u < s.ta + s.tc) d = s.da + s.vc * (u - s.ta);
+  else { const w = Math.min(u - s.ta - s.tc, s.td); d = s.da + s.vc * s.tc + s.vc * w - s.a * w * w / 2; }
+  return s.d0 + Math.min(d, s.L);
+}
+
+// Prime tower at the back left of the bed: after every toolchange the new tool fills one band of it.
+const towerBand = (b) => [TOWER.y0 + b * BAND_D, TOWER.y0 + (b + 1) * BAND_D];
+function towerPath(layer, b) {
+  const [y0] = towerBand(b), pts = [], n = Math.round(BAND_D / LINE_W);
+  for (let i = 0; i < n; i++) {
+    const y = y0 + (i + 0.5) * LINE_W, [u, v] = (i + layer) % 2 ? [TOWER.x0 + TOWER.w, TOWER.x0] : [TOWER.x0, TOWER.x0 + TOWER.w];
+    pts.push([u, y], [v, y]);
+  }
+  return pts;
+}
+
+// ---------- console: the commands the printer runs, as Mainsail-style lines ----------
+const consoleEl = document.getElementById("console"), tcEl = document.getElementById("tc"), tcTimeEl = document.getElementById("tc-time");
+const clock = (t) => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+function log(text, cls = "") {
+  const line = document.createElement("div");
+  line.innerHTML = '<span class="t">' + clock(stats.time) + "</span> " + (cls ? '<span class="' + cls + '">' + esc(text) + "</span>" : esc(text));
+  consoleEl.append(line);
+  while (consoleEl.childElementCount > 120) consoleEl.firstElementChild.remove();
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+const EXTRUDER = ["extruder", "extruder1", "extruder2", "extruder3"];
+const zNow = () => (layer + 1) * LAYER_H;
+let queue = [], bandAt = 0;
+const phys = (x) => x - PRINT_SX0;                                  // sx -> printer X
+function changePhases(next, [px, py]) {
+  const prev = active, approach = APPROACH[prev + ">" + next] || 0;
+  const tc = { prev, next, t: 0, T: 0 };
+  const lift = { kind: "change", tc, begin() {
+      log("T" + next); log("SET_VELOCITY_LIMIT ACCEL=" + cfg.tcAccel); log("G91"); log("G1 Z" + TC.hopPre + " F1800"); log("G90");
+      this.p = profile(hop, TC.hopPre, LIMITS.vz, Math.min(cfg.tcAccel, LIMITS.az)); this.T = this.p.T; tc.T += this.T; },
+    run(t) { hop = posAt(this.p, t); } };
+  const move = { kind: "change", tc, begin() {
+      const to = sx.map((_, j) => (j < next ? LP[j] : j > next ? RP[j - 1] : PRINT_SX0 + px + approach));
+      this.plan = parallelPlan(to, next, py, prev < 0 ? hop : TC.hop); this.T = this.plan.T; tc.T += this.T;
+      const { ps, py: pY, pz } = this.plan, moving = ps.map((p, j) => (p.T || j === next ? "T" + j + "=" + phys(p.target).toFixed(2) : null)).filter(Boolean);
+      log("QUADRO_PARALLEL_MOVE " + moving.join(" ") + " Y=" + py.toFixed(2) + (prev < 0 ? "" : " Z=" + (zNow() + TC.hop).toFixed(2)) + " SPEED=" + cfg.tcSpeed + " ARRIVING=T" + next);
+      log("// QUADRO delayed plan: ARRIVING=T" + next + " delay=" + ps[next].delay.toFixed(6) + "s finish=" + this.T.toFixed(6) + "s speed=" + Math.min(cfg.tcSpeed, LIMITS.v).toFixed(3) + " accel=" + cfg.tcAccel.toFixed(3), "r");
+      const row = (name, p, j) => "<tr><td>" + (j >= 0 ? '<i style="background:' + COLORS[j] + '"></i>' : "") + name + "</td><td>" + (p.T ? fmt(name === "Y bed" || name === "Z" ? p.start : phys(p.start), name === "Z" ? 1 : 0) + " → " + fmt(name === "Y bed" || name === "Z" ? p.target : phys(p.target), name === "Z" ? 1 : 0) : "holds") + "</td><td>" + (p.T ? fmt(p.peak) + " mm/s" : "—") + "</td><td>" + (p.T ? (p.delay > 0.001 ? "+" + fmt(p.delay, 2) + " s" : "0 s") : "—") + "</td></tr>";
+      tcEl.innerHTML = ps.map((p, j) => row("T" + j, p, j)).join("") + row("Y bed", pY, -1) + (pz.T ? row("Z", { ...pz, start: zNow() + pz.start, target: zNow() + pz.target }, -1) : "");
+      tcTimeEl.textContent = (prev < 0 ? "start" : "T" + prev) + " → T" + next + " · " + fmt(this.T, 2) + " s";
+    },
+    run(t) { const { ps, py, pz } = this.plan; sx = ps.map((p) => posAt(p, t)); ny = posAt(py, t); hop = posAt(pz, t); },
+    end() { log("SET_DUAL_CARRIAGE CARRIAGE=carriage_t" + next + " MODE=PRIMARY"); log("ACTIVATE_EXTRUDER EXTRUDER=" + EXTRUDER[next]); } };
+  const drop = { kind: "change", tc, begin() { log("G1 Z" + zNow().toFixed(2)); this.p = profile(hop, 0, LIMITS.vz, LIMITS.az); this.T = this.p.T; tc.T += this.T; }, run(t) { hop = posAt(this.p, t); } };
+  const phases = prev < 0 ? [move] : [lift, move, drop], first = phases[0], begin = first.begin;
+  first.begin = function () { if (prev >= 0) stats.changes++; active = next; setActive(next); begin.call(this); };
+  return phases;
+}
+// an ordinary G1 of the active tool and the bed: one straight move, its own trapezoid
+function travelPhase(to) {
+  return { kind: "travel", begin() {
+      this.a = [sx[active], ny]; this.b = [PRINT_SX0 + to[0], to[1]];
+      this.L = Math.hypot(this.b[0] - this.a[0], this.b[1] - this.a[1]); this.p = profile(0, this.L, Math.min(cfg.travel, LIMITS.v), cfg.accel); this.T = this.p.T;
+    },
+    run(t) { const f = this.L ? posAt(this.p, t) / this.L : 1; sx[active] = this.a[0] + (this.b[0] - this.a[0]) * f; ny = this.a[1] + (this.b[1] - this.a[1]) * f; } };
+}
+function extrudePhase(kind, path, onEnd) {
+  return { kind, path, begin() {
+      this.plan = planPath(path, cfg.print, cfg.accel); this.T = this.plan.T; this.s = 0;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * (Math.ceil(this.plan.L / 0.5) + path.length + 10)), 3));
+      geo.setDrawRange(0, 0);
+      this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: COLORS[active] })); this.n = 0;
+      trails.add(this.line); this.point(...path[0]);
+    },
+    point(px, py) {
+      const pos = this.line.geometry.attributes.position;
+      if (this.n >= pos.count) return;
+      pos.setXYZ(this.n++, -(PRINT_SX0 + px) / 1000, (PEI_TOP + (layer + 1) * LAYER_H) / 1000, (PRINT_Z0 + py) / 1000);
+      pos.needsUpdate = true; this.line.geometry.setDrawRange(0, this.n);
+    },
+    run(t) {
+      const before = this.s; this.s = pathAt(this.plan, t);
+      // sample the path every 0.5 mm so corners stay sharp at high speed
+      for (let d = Math.ceil(before / 0.5) * 0.5; d < this.s; d += 0.5) this.point(...pointAlong(path, d));
+      const [px, py] = pointAlong(path, this.s);
+      sx[active] = PRINT_SX0 + px; ny = py; this.point(px, py);
+    },
+    end() { trails.remove(this.line); this.line.geometry.dispose(); onEnd(); } };
+}
+function nextJob() {
+  if (jobAt >= jobs.length) {
+    if (layer + 1 >= LAYERS) { phase = { kind: "done" }; setPlaying(false); return; }
+    layer++; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0;
+    log(";LAYER_CHANGE  Z" + zNow().toFixed(2), "c");
+  }
+  const job = jobs[jobAt++], path = blockPath(job.q, layer);
+  queue = [];
+  if (job.tool !== active) {
+    if (active < 0) queue.push(...changePhases(job.tool, path[0]));
+    else {
+      const b = bandAt++, tower = towerPath(layer, b), tool = job.tool, approach = APPROACH[active + ">" + tool] || 0;
+      queue.push(...changePhases(tool, tower[0]));
+      if (approach) queue.push(travelPhase(tower[0]));                // the macro stops 10 mm short; the next G1 finishes it
+      queue.push({ kind: "note", begin() { log("; prime tower, T" + tool + " purges " + PURGE_VOL + " mm³", "c"); } });
+      queue.push(extrudePhase("purge", tower, () => { addTowerBand(layer, b, tool); stats.purge += PURGE_VOL; }));
+    }
+  }
+  queue.push(travelPhase(path[0]));
+  queue.push({ kind: "note", begin() { log("; T" + job.tool + " prints its block", "c"); } });
+  queue.push(extrudePhase("print", path, () => { done.add(job.q); growBlocks(); }));
+  advance();
+}
+function advance() { phase = queue.shift() || { kind: "idle" }; phase.t = 0; phase.T = 0; phase.run ||= () => {}; phase.begin?.(); }
+function step(dt) {
+  while (dt > 1e-9) {
+    if (phase.kind === "idle") nextJob();
+    if (phase.kind === "done") return;
+    const use = Math.min(dt, phase.T - phase.t);
+    phase.t += use; dt -= use; stats.time += use;
+    if (phase.tc) phase.tc.t += use;
+    phase.run(phase.t);
+    if (phase.t >= phase.T - 1e-9) { phase.end?.(); advance(); }
+  }
+}
+// the printed cube: one box per block, grown as its layers are finished
+const part = new THREE.Group();
+bedGroup.add(part);
+const blocks = [];
+for (let tier = 0; tier < 4; tier++) for (let q = 0; q < 4; q++) {
+  const [qx, qy] = QUADS[q];
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(BLOCK / 1000, 1, BLOCK / 1000), new THREE.MeshStandardMaterial({ color: COLORS[toolAt(tier, q)], roughness: 0.55 }));
+  mesh.position.set(-(PRINT_SX0 + CUBE_X0 + qx * BLOCK + BLOCK / 2) / 1000, 0, (PRINT_Z0 + CUBE_Y0 + qy * BLOCK + BLOCK / 2) / 1000);
+  mesh.visible = false;
+  part.add(mesh); blocks.push({ tier, q, mesh });
+}
+// the prime tower: one thin slab per toolchange band and layer, in the colour that was purged into it
+const tower = new THREE.InstancedMesh(new THREE.BoxGeometry(TOWER.w / 1000, LAYER_H / 1000, BAND_D / 1000), new THREE.MeshStandardMaterial({ roughness: 0.6 }), LAYERS * 3);
+tower.count = 0; tower.frustumCulled = false;
+bedGroup.add(tower);
+function addTowerBand(L, b, tool) {
+  const m = new THREE.Matrix4().makeTranslation(-(PRINT_SX0 + TOWER.x0 + TOWER.w / 2) / 1000, (PEI_TOP + (L + 0.5) * LAYER_H) / 1000, (PRINT_Z0 + towerBand(b)[0] + BAND_D / 2) / 1000);
+  tower.setMatrixAt(tower.count, m); tower.setColorAt(tower.count, new THREE.Color(COLORS[tool]));
+  tower.count++; tower.instanceMatrix.needsUpdate = true; tower.instanceColor.needsUpdate = true; dirty = true;
+}
+// rebuild the tower below a layer we jump to, replaying the same tool order
+function fillTower(upTo) {
+  tower.count = 0;
+  let a = -1;
+  for (let L = 0; L < upTo; L++) {
+    let b = 0;
+    for (const { tool } of layerJobs(L, a)) { if (a >= 0 && tool !== a) addTowerBand(L, b++, tool); a = tool; }
+  }
+  return a;
+}
+function growBlocks() {
+  for (const { tier, q, mesh } of blocks) {
+    const below = tier * PER_TIER;
+    let n = Math.max(0, Math.min(PER_TIER, layer - below + (done.has(q) && Math.floor(layer / PER_TIER) === tier ? 1 : 0)));
+    if (layer >= below + PER_TIER) n = PER_TIER;
+    mesh.visible = n > 0;
+    if (n > 0) { const h = n * LAYER_H; mesh.scale.y = h / 1000; mesh.position.y = (PEI_TOP + tier * TIER + h / 2) / 1000; }
+  }
+  dirty = true;
+}
+function restart(toLayer = 0) {
+  for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
+  phase.end = null; queue = [];
+  // place the heads as the printer would have them: the active tool over the part, the others parked either side
+  active = fillTower(toLayer); setActive(active);
+  sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
+  if (active >= 0) ny = CUBE_Y0;
+  layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle" };
+  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; consoleEl.textContent = ""; log("START_PRINT", "c"); }
+  else log("; skipped to layer " + (toLayer + 1), "c");
+  lastPos = null; vel = 0;
+  growBlocks(); draw(); run();
+}
+function draw() {
+  headGroups.forEach((g, j) => (g.position.x = -(sx[j] - SX0[j]) / 1000));
+  bedGroup.position.z = (NOZZLE_Z - (PRINT_Z0 + ny)) / 1000;
+  zGroup.position.y = ((layer + 1) * LAYER_H + hop - NOZZLE_DROP) / 1000;
+  if (runs.length) { updateRuns(); pressCaps(); updateBedCable(); }
+  dirty = true;
+}
+
+// ---------- readout and dashboard ----------
+const $ = (id) => document.getElementById(id);
+const readout = $("readout"), toolsEl = $("tools");
+function slotName(x) { for (let i = 0; i < 3; i++) { if (Math.abs(x - LP[i]) < 0.5) return "Docked, Qdock L" + (i + 1); if (Math.abs(x - RP[i]) < 0.5) return "Docked, Qdock R" + (i + 1); } return null; }
+const STATE = { change: "Toolchange", travel: "Travel", purge: "Prime tower", print: "Printing", done: "Complete", idle: "Ready", note: "Printing" };
+let vel = 0, lastPos = null;
+function set(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
+function report() {
+  const z = zNow() + hop, k = phase.kind;
+  let text = "Layer " + (layer + 1) + "/" + LAYERS + " · ";
+  if (k === "change") text += "Toolchange " + (phase.tc.prev < 0 ? "start" : "T" + phase.tc.prev) + " → T" + phase.tc.next;
+  else if (k === "done") text = "Print complete";
+  else if (active >= 0) text += "T" + active + " " + (STATE[k] || "").toLowerCase();
+  if (readout.textContent !== text) readout.innerHTML = "<b>" + text + "</b>";
+  const progress = k === "done" ? 1 : (layer + jobAt / 4) / LAYERS;
+  set("pct", Math.floor(progress * 100) + "%"); $("bar").style.width = (progress * 100).toFixed(1) + "%";
+  set("d-layer", (layer + 1) + " / " + LAYERS); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
+  set("d-state", STATE[k] || "Ready"); set("d-tool", active < 0 ? "—" : "T" + active);
+  set("d-x", active < 0 ? "—" : fmt(phys(sx[active]), 2)); set("d-y", fmt(ny, 2)); set("d-z", fmt(z, 2));
+  set("d-v", fmt(vel) + " mm/s"); set("d-purge", fmt(stats.purge) + " mm³");
+  const html = sx.map((x, j) => {
+    const where = j === active && (k === "print" || k === "note") ? "Printing" : j === active && k === "purge" ? "Prime tower" : slotName(x) || "Moving";
+    return '<tr class="' + (j === active ? "on" : "") + '"><td><i style="background:' + COLORS[j] + '"></i>T' + j + "</td><td>" + fmt(phys(x), 2) + "</td><td>" + where + "</td></tr>";
+  }).join("");
+  if (toolsEl.innerHTML !== html) toolsEl.innerHTML = html;
+}
+// toolhead velocity, as the web UI shows it: the active nozzle's speed over the bed
+function sampleVelocity(dt) {
+  if (active < 0 || dt <= 0) return;
+  const p = [phys(sx[active]), ny, hop];
+  if (lastPos) { const v = Math.hypot(p[0] - lastPos[0], p[1] - lastPos[1], p[2] - lastPos[2]) / dt; vel += (v - vel) * Math.min(1, dt * 12); }
+  lastPos = p;
+}
+
+// ---------- loop ----------
+let last = 0, frame = 0;
+function tick(now) {
+  const dt = last ? Math.min((now - last) / 1000, 0.1) : 1 / 60;
+  last = now;
+  if (playing && ready) { step(dt * cfg.scale); sampleVelocity(dt * cfg.scale); draw(); }
+  if (tween) {
+    tween.t = Math.min(1, tween.t + dt / 0.7);
+    const k = tween.t < 0.5 ? 2 * tween.t * tween.t : 1 - Math.pow(-2 * tween.t + 2, 2) / 2;
+    camera.position.lerpVectors(tween.p0, tween.p1, k); controls.target.lerpVectors(tween.t0, tween.t1, k); dirty = true;
+    if (tween.t >= 1) tween = null;
+  }
+  const moving = controls.update();
+  if (dirty || moving) { renderer.render(scene, camera); dirty = false; }
+  report();
+  frame = playing || tween || moving ? requestAnimationFrame(tick) : 0;
+}
+function run() { if (!frame) { last = 0; frame = requestAnimationFrame(tick); } }
+controls.addEventListener("start", run);
+controls.addEventListener("change", run);
+
+// ---------- controls ----------
+const playBtn = document.getElementById("play");
+function setPlaying(on) { playing = on; playBtn.textContent = on ? "Pause" : "Play"; playBtn.setAttribute("aria-pressed", String(on)); run(); }
+playBtn.addEventListener("click", () => setPlaying(!playing));
+document.getElementById("restart").addEventListener("click", () => { restart(0); setPlaying(true); });
+document.getElementById("skip").addEventListener("click", () => { if (phase.kind !== "done") { restart(Math.min(LAYERS - 1, layer + 10)); setPlaying(true); } });
+document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+document.querySelectorAll("[data-speed]").forEach((b) => b.addEventListener("click", () => {
+  cfg.scale = Number(b.dataset.speed);
+  document.querySelectorAll("[data-speed]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+}));
+log("START_PRINT", "c");
+setPlaying(playing);
+report();
+</script>
+
+</body></html>
