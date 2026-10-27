@@ -316,7 +316,7 @@ function decodeToolpath(tp) {
   return tp.layers.map(([z, runs]) => ({ z, runs: runs.map((r) => {
     const path = []; let x = 0, y = 0;
     for (let i = 2; i < r.length; i += 2) { x = i === 2 ? r[i] : x + r[i]; y = i === 2 ? r[i + 1] : y + r[i + 1]; path.push([x / 10, y / 10]); }
-    return { tool: r[0], tower: r[1] === 1, path };
+    return { tool: r[0], tower: r[1] === 1, outer: r[1] === 2, path };
   }) })).filter((l) => l.runs.length);
 }
 const lengthOf = (p) => p.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
@@ -392,28 +392,72 @@ const zGroup = new THREE.Group(), bedGroup = new THREE.Group(), headGroups = [0,
 let center = new THREE.Vector3(), radius = 1;
 const trails = new THREE.Group();
 bedGroup.add(trails);
-// what a sliced model has printed so far: one line mesh per layer, filled run by run
+// what a sliced model has printed so far, filled run by run. Per layer, one line mesh for what is inside the part and
+// one shaded mesh for the outer walls: each wall line is a bead (0.42 mm wide, the layer high) with rounded normals,
+// so the light picks out the layer lines and the surface texture the way the slicer's preview does.
 const printed = new THREE.Group();
 bedGroup.add(printed);
-const layerMeshes = [];
-function bakeRun(L, run) {
-  let m = layerMeshes[L];
-  if (!m) {
-    const n = 2 * custom.layers[L].runs.reduce((s, r) => s + r.path.length - 1, 0), geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
-    geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
-    geo.setDrawRange(0, 0);
-    m = layerMeshes[L] = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true })); m.n = 0; m.frustumCulled = false;
-    printed.add(m);
-  }
-  const pos = m.geometry.attributes.position, col = m.geometry.attributes.color, c = new THREE.Color(colourOf(run.tool)), y = (PEI_TOP + custom.layers[L].z) / 1000;
-  for (let i = 1; i < run.path.length; i++) for (const [px, py] of [run.path[i - 1], run.path[i]]) {
-    if (m.n >= pos.count) break;
-    pos.setXYZ(m.n, -(PRINT_SX0 + px) / 1000, y, (PRINT_Z0 + py) / 1000); col.setXYZ(m.n++, c.r, c.g, c.b);
-  }
-  pos.needsUpdate = col.needsUpdate = true; m.geometry.setDrawRange(0, m.n); dirty = true;
+const layerMeshes = [], BEAD_W = 0.42;
+const lineMat = new THREE.LineBasicMaterial({ vertexColors: true });
+const beadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide });
+function layerMesh(L) {
+  if (layerMeshes[L]) return layerMeshes[L];
+  let nl = 0, nb = 0;
+  for (const r of custom.layers[L].runs) if (r.outer) nb += r.path.length; else nl += 2 * (r.path.length - 1);
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * nl), 3));
+  lg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * nl), 3));
+  lg.setDrawRange(0, 0);
+  const lines = new THREE.LineSegments(lg, lineMat); lines.n = 0; lines.frustumCulled = false;
+  const bg = new THREE.BufferGeometry();                           // 4 vertices per wall point: the bead's cross-section
+  for (const a of ["position", "normal", "color"]) bg.setAttribute(a, new THREE.BufferAttribute(new Float32Array(12 * nb), 3));
+  bg.setIndex(new THREE.BufferAttribute(new Uint32Array(18 * Math.max(0, nb - 1)), 1));
+  bg.setDrawRange(0, 0);
+  const beads = new THREE.Mesh(bg, beadMat); beads.v = 0; beads.i = 0; beads.frustumCulled = false;
+  printed.add(lines, beads);
+  return (layerMeshes[L] = { lines, beads });
 }
-function clearPrinted() { for (const m of layerMeshes) if (m) { printed.remove(m); m.geometry.dispose(); m.material.dispose(); } layerMeshes.length = 0; }
+function bakeRun(L, run) {
+  const { lines, beads } = layerMesh(L), c = new THREE.Color(colourOf(run.tool)), z = custom.layers[L].z, y = (PEI_TOP + z) / 1000;
+  const wx = (px) => -(PRINT_SX0 + px) / 1000, wz = (py) => (PRINT_Z0 + py) / 1000;
+  if (!run.outer) {
+    const pos = lines.geometry.attributes.position, col = lines.geometry.attributes.color;
+    for (let i = 1; i < run.path.length; i++) for (const [px, py] of [run.path[i - 1], run.path[i]]) {
+      if (lines.n >= pos.count) break;
+      pos.setXYZ(lines.n, wx(px), y, wz(py)); col.setXYZ(lines.n++, c.r, c.g, c.b);
+    }
+    pos.needsUpdate = col.needsUpdate = true; lines.geometry.setDrawRange(0, lines.n); dirty = true;
+    return;
+  }
+  const g = beads.geometry, pos = g.attributes.position, nor = g.attributes.normal, col = g.attributes.color, idx = g.index, P = run.path, n = P.length;
+  const h = Math.min(0.4, Math.max(0.05, z - (L ? custom.layers[L - 1].z : 0))) / 1000, half = BEAD_W / 2000, v0 = beads.v;
+  if (v0 + 4 * n > pos.count) return;
+  for (let i = 0; i < n; i++) {
+    // across the bead: perpendicular to the path, averaged at corners
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1]; const t = Math.hypot(tx, ty) || 1; tx /= t; ty /= t;
+    const sx = -wx(0) + wx(-ty), sz = wz(tx) - wz(0), x = wx(P[i][0]), zz = wz(P[i][1]);   // side direction in the scene
+    const k = Math.hypot(sx, sz) || 1, ux = sx / k, uz = sz / k;
+    // left bottom, left top, right top, right bottom; the top normals lean out so the bead reads round
+    const ring = [[-1, -h, -1, 0], [-0.8, 0, -0.6, 0.8], [0.8, 0, 0.6, 0.8], [1, -h, 1, 0]];
+    ring.forEach(([o, dy, no, ny], j) => {
+      const v = v0 + 4 * i + j;
+      pos.setXYZ(v, x + ux * half * o, y + dy, zz + uz * half * o);
+      nor.setXYZ(v, ux * no, ny, uz * no);
+      col.setXYZ(v, c.r, c.g, c.b);
+    });
+    if (i) for (let j = 0; j < 3; j++) {                            // left side, top, right side between this point and the last
+      const p0 = v0 + 4 * (i - 1) + j, p1 = p0 + 1, q0 = p0 + 4, q1 = p1 + 4;
+      idx.array.set([p0, q0, p1, p1, q0, q1], beads.i); beads.i += 6;
+    }
+  }
+  beads.v += 4 * n;
+  pos.needsUpdate = nor.needsUpdate = col.needsUpdate = idx.needsUpdate = true; g.setDrawRange(0, beads.i); dirty = true;
+}
+function clearPrinted() {
+  for (const m of layerMeshes) if (m) for (const o of [m.lines, m.beads]) { printed.remove(o); o.geometry.dispose(); }
+  layerMeshes.length = 0;
+}
 
 const plugs = [], caps = [], capParts = [], headLeds = [];
 // move an object by a world-space offset (mm), whatever its parent's frame
