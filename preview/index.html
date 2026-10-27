@@ -60,7 +60,7 @@ button[data-play] { min-width: 104px; font-weight: 600; }
 .kv div { min-width: 0; }
 .kv span { display: block; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; }
 .kv b { font: 500 15px var(--mono); font-variant-numeric: tabular-nums; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; color: inherit; }
 th { text-align: left; font-weight: 500; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px 6px 0; }
 td { padding: 5px 6px 5px 0; border-top: 1px solid var(--d-line); font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 td:first-child { font-family: var(--sans); font-weight: 600; }
@@ -93,6 +93,14 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .ask-log .a { color: var(--d-ink); } .ask-log .a.e { color: #ff7b72; } .ask-log .a.wait { color: var(--d-muted); }
 .ask-log code { font: 12px var(--mono); background: var(--d-bg); border: 1px solid var(--d-line); border-radius: 4px; padding: 0 4px; }
 .ask-log button.code { min-height: 0; padding: 0 5px; font: 12px var(--mono); color: var(--d-accent); background: var(--d-bg); border: 1px dashed var(--d-line); border-radius: 4px; }
+.slice-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.slice-form input[type=file] { flex: 1; min-width: 0; color: var(--d-muted); font: 13px var(--sans); }
+.slice-form input[type=file]::file-selector-button { font: 500 13px var(--sans); color: var(--d-ink); background: var(--d-head); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 12px; margin-right: 10px; cursor: pointer; }
+.slice-form button { background: var(--d-accent); color: #fff; border-color: var(--d-accent); font-weight: 600; }
+.slice-note { margin: 8px 0 0; font-size: 12px; color: var(--d-muted); }
+.slice-status { margin: 10px 0 0; font-size: 14px; } .slice-status.e { color: #ff7b72; }
+#slice-out table { margin-top: 10px; } #slice-out td.best { color: #8fd18f; }
+#slice-out td small { display: block; font-size: 11px; color: var(--d-muted); font-family: var(--sans); font-weight: 400; }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
 @media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
 </style>
@@ -186,6 +194,15 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         </div>
         <pre class="console" id="console" aria-live="off"></pre>
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
+      </section>
+      <section class="card wide">
+        <h2>Slice your model <small>OrcaSlicer 2.4.2 · Bambu Lab A1 combo · Snapmaker U1 · Co Print Quadro</small></h2>
+        <div class="body">
+          <form class="slice-form" id="slice-form"><input type="file" id="slice-file" accept=".3mf,.stl" aria-label="Model file (3MF or STL)"><button type="submit">Slice for all three</button></form>
+          <p class="slice-note">Upload a 3MF with its colours assigned (up to 4), or an STL for one colour. Each printer uses its standard 0.20 mm profile with PLA. The Quadro file then appears on the printer screen below.</p>
+          <p class="slice-status" id="slice-status" aria-live="polite"></p>
+          <div id="slice-out"></div>
+        </div>
       </section>
       <section class="card wide">
         <h2>Printer screen <small>QuadroScreen · tap it to print, move and calibrate · calibrations take real time, 10× playback speeds them up</small></h2>
@@ -1282,7 +1299,9 @@ askForm.addEventListener("submit", async (e) => {
 
 // ---------- the printer's touch screen (QuadroScreen), driving the same console ----------
 const QS_ASSETS = window.QS_ASSETS || {};
-createScreen($("qscreen"), {
+const sliced = [];                                  // models sliced on this page, newest first, shown in the screen's Files
+const screen = createScreen($("qscreen"), {
+  files: () => sliced,
   run: submit, colors: COLORS, colorNames: ["Blue", "Red", "Green", "Yellow"],
   asset: (n) => QS_ASSETS[n] || "qs/" + n,
   clearBed,
@@ -1296,6 +1315,44 @@ createScreen($("qscreen"), {
       heaters: K ? K.heaters() : null, homed: k ? [...k.homed] : [], fan: k && active >= 0 ? k.fans["fan_generic fan_t" + active] : 0,
     };
   },
+});
+
+// ---------- "Slice your model": the slicing service runs OrcaSlicer for the three printers ----------
+const SLICER_URL = "https://quadro-slicer-312122953843.europe-west1.run.app";
+const sliceForm = $("slice-form"), sliceFile = $("slice-file"), sliceStatus = $("slice-status"), sliceOut = $("slice-out");
+const hm = (s) => { const h = Math.floor(s / 3600), m = Math.round(s / 60) % 60; return h ? h + " h " + m + " min" : m + " min"; };
+function showSlice(r) {
+  const rows = ["a1", "u1", "quadro"].map((k) => r.printers[k]), ok = rows.filter((p) => !p.error);
+  const waste = (p) => p.tower + p.flush, fastest = Math.min(...ok.map((p) => p.time_s)), least = Math.min(...ok.map(waste));
+  sliceOut.innerHTML = '<table><thead><tr><th>Printer</th><th>Print time</th><th>Part</th><th>Prime tower</th><th>Flush (poop)</th><th>Waste</th></tr></thead><tbody>' +
+    rows.map((p) => p.error ? "<tr><td>" + p.printer + '</td><td colspan="5">' + p.error.replace(/[<>&]/g, "") + "</td></tr>" :
+      "<tr><td>" + p.printer + '</td><td class="' + (p.time_s === fastest ? "best" : "") + '">' + hm(p.time_s) + "<small>" + p.toolchanges + " changes" + (p.toolchange_time_s ? ", +" + Math.round(p.toolchange_time_s / 60) + " min toolchange" : "") + "</small></td><td>" +
+      p.part.toFixed(1) + " g</td><td>" + p.tower.toFixed(1) + " g</td><td>" + p.flush.toFixed(1) + ' g</td><td class="' + (waste(p) === least ? "best" : "") + '">' + waste(p).toFixed(1) + " g</td></tr>").join("") +
+    "</tbody></table>";
+}
+sliceForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = sliceFile.files[0];
+  if (!file || sliceForm.dataset.busy) return;
+  if (!SLICER_URL) { sliceStatus.className = "slice-status e"; sliceStatus.textContent = "The slicing service is not online yet."; return; }
+  sliceForm.dataset.busy = "1"; sliceStatus.className = "slice-status"; sliceStatus.textContent = "Slicing " + file.name + " for three printers…"; sliceOut.innerHTML = "";
+  try {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 300000);
+    const res = await fetch(SLICER_URL + "/slice", { method: "POST", headers: { "X-Filename": file.name.replace(/[^\w.\- ]/g, "_") }, body: file, signal: ctl.signal }).finally(() => clearTimeout(timer));
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok || r.error || !r.printers) throw new Error(r.error || "The slicing service is unavailable right now.");
+    showSlice(r);
+    const q = r.printers.quadro;
+    if (!q.error) {
+      sliced.unshift({ name: file.name.replace(/\.(3mf|stl)$/i, "") + ".gcode", colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
+      screen.go("files");
+      sliceStatus.textContent = "Done. The Quadro file is on the printer screen below.";
+    } else sliceStatus.textContent = "Done.";
+  } catch (err) {
+    sliceStatus.className = "slice-status e";
+    sliceStatus.textContent = err.name === "AbortError" ? "Slicing took too long." : err instanceof TypeError ? "The slicing service can't be reached." : err.message;
+  }
+  delete sliceForm.dataset.busy;
 });
 
 fetch(CONFIG_URL).then((r) => r.json()).then((config) => { startKlipper(config); addPin(config.bedPin.T0); }).catch((e) => log("!! Could not load the printer config: " + e.message, "e"));

@@ -156,7 +156,12 @@ export function createScreen(frame, api) {
   function go(p, s = null) { page = p; sub = s; rendered = ""; render(); }
   root.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 
-  const thumb = () => `<div class="qs-thumb">${[3, 2, 0, 1].map((j) => `<i style="background:${api.colors[j]}"></i>`).join("")}</div>`;
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
+  const hex = (c) => (/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(c) ? c.slice(0, 7) : "#888");
+  const thumb = (cols = [3, 2, 0, 1].map((j) => api.colors[j])) => `<div class="qs-thumb">${[0, 1, 2, 3].map((i) => `<i style="background:${hex(cols[i % cols.length])}"></i>`).join("")}</div>`;
+  // models sliced for Quadro on the page ("Slice your model"), listed under the demo file
+  const uploads = () => (api.files ? api.files() : []);
+  const g = (x) => (x >= 10 ? Math.round(x) : x.toFixed(1)) + " g";
   const fmtTime = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m ${String(s % 60).padStart(2, "0")}s`; };
 
   // ---------- pages ----------
@@ -171,10 +176,16 @@ export function createScreen(frame, api) {
         <div><button class="qs-big" data-a="files">Start Print <img src="${A("startPrintBlue.png")}" alt=""></button></div></div>`;
     },
     files() {
+      const ups = uploads(), u = typeof sub === "number" ? ups[sub] : null;
       return `<h2>Files</h2><div class="qs-list">
+        ${ups.map((f, i) => `<button class="qs-file" data-up="${i}">${thumb(f.colours)}<div><b>${esc(f.name)}</b><span>${fmtTime(f.time_s)} · ${g(f.part)} · tower ${g(f.tower)} · ${f.colours.length} colour${f.colours.length > 1 ? "s" : ""} · ${f.toolchanges} toolchanges</span></div></button>`).join("")}
         <button class="qs-file" data-a="pick">${thumb()}<div><b>${FILE}</b><span>Alignment test cube · 20 mm · 4 colours · 100 layers</span></div></button>
       </div>${sub === "confirm" ? `<div class="qs-dialog"><div>${thumb()}<b>${FILE}</b><span class="muted">Start printing this file?</span>
-        <div class="btns"><button data-a="close">Cancel</button><button class="primary" data-a="print">Print</button></div></div></div>` : ""}`;
+        <div class="btns"><button data-a="close">Cancel</button><button class="primary" data-a="print">Print</button></div></div></div>` : ""}
+      ${u ? `<div class="qs-dialog"><div>${thumb(u.colours)}<b>${esc(u.name)}</b>
+        <span class="muted" style="line-height:1.6">Sliced for Quadro with OrcaSlicer<br>Print time ${fmtTime(u.time_s)} · ${u.toolchanges} toolchanges<br>Part ${g(u.part)} · prime tower ${g(u.tower)}</span>
+        <span class="muted" style="font-size:12px">This online printer prints the demo cube; your G-code is ready to download.</span>
+        <div class="btns"><button data-a="close">Close</button>${u.gcode ? `<button class="primary" data-a="download">Download G-code</button>` : ""}</div></div></div>` : ""}`;
     },
     job() {
       const s = st(), pct = Math.floor(s.progress * 100), C = 2 * Math.PI * 54;
@@ -283,6 +294,7 @@ export function createScreen(frame, api) {
       send("T" + j, `M109 T${j} S220`, d.load !== undefined ? "LOAD_FILAMENT" : "UNLOAD_FILAMENT");
       toast(`T${j + 1}: heating to 220°, then ${d.load !== undefined ? "loading" : "unloading"}`); return;
     }
+    if (d.up !== undefined) { sub = Number(d.up); rendered = ""; render(); return; }
     if (d.cal) { if (printing()) { toast("Not allowed during print"); return; } startCal(d.cal); return; }
     if (d.et !== undefined) { sub = Number(d.et); rendered = ""; render(); return; }
     if (d.settemp !== undefined) { const j = sub ?? Math.max(0, s.active); send(`M104 T${j} S${d.settemp}`); return; }
@@ -292,6 +304,7 @@ export function createScreen(frame, api) {
       case "files": go("files"); break;
       case "pick": if (printing()) toast("A print is already running"); else { sub = "confirm"; rendered = ""; render(); } break;
       case "close": sub = null; rendered = ""; render(); break;
+      case "download": { const u = uploads()[sub]; if (u && u.gcode) window.open(u.gcode, "_blank", "noopener"); break; }
       case "print": send("SDCARD_PRINT_FILE FILENAME=" + FILE); go("home"); break;
       case "pause": send("PAUSE"); break;
       case "resume": send("RESUME"); break;
