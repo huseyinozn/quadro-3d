@@ -63,6 +63,9 @@ export function createPrinter(CFG, host) {
   const zref = (BM.zero_reference_position || "150,150").split(",").map(Number);
   const bedZ = (x, y) => meshAt(x, y) - meshAt(zref[0], zref[1]);   // nozzle height where it touches the bed
 
+  // files on the printer: the demo cube, plus whatever the page sliced (host.print.files)
+  const sdFiles = () => (host.print.files ? host.print.files() : ["alignment_test_cube.gcode"]);
+
   // ---------- state ----------
   let st;
   function freshState(pose) {
@@ -971,14 +974,14 @@ export function createPrinter(CFG, host) {
     register("CANCEL_PRINT", () => { queueCall(() => host.print.cancel()); st.paused = st.pauseSent = false; }, "Cancel the current print");
     register("SDCARD_PRINT_FILE", (g) => {
       const f = g.get("FILENAME").replace(/^\/+/, "");
-      if (f !== "alignment_test_cube.gcode") err("Unable to open file");
+      if (!sdFiles().includes(f)) err("Unable to open file");
       if (host.print.state() === "printing") err("SD busy");
-      queueCall(() => host.print.start());
+      queueCall(() => host.print.start(f));
     }, "Loads a SD file and starts the print.  May include files in subdirectories.");
     register("SDCARD_RESET_FILE", () => { if (host.print.state() === "printing") err("Cannot reset file while printing"); }, "Clears a loaded SD File. Stops the print if necessary");
-    register("M20", () => raw("Begin file list\nalignment_test_cube.gcode 412844\nEnd file list"), null);
-    register("M23", (g) => { const f = rawParams("M23", g.origline).trim(); if (f !== "alignment_test_cube.gcode") err("Unable to open file"); raw("File opened:" + f + " Size:412844\nFile selected"); }, null);
-    register("M24", function* () { if (st.paused) yield* runLine("RESUME"); else queueCall(() => host.print.start()); }, null);
+    register("M20", () => raw("Begin file list\n" + sdFiles().map((f) => f + " 412844").join("\n") + "\nEnd file list"), null);
+    register("M23", (g) => { const f = rawParams("M23", g.origline).trim(); if (!sdFiles().includes(f)) err("Unable to open file"); st.sdFile = f; raw("File opened:" + f + " Size:412844\nFile selected"); }, null);
+    register("M24", function* () { if (st.paused) yield* runLine("RESUME"); else queueCall(() => host.print.start(st.sdFile)); }, null);
     register("M25", function* () { yield* runLine("PAUSE"); }, null);
     register("M26", () => {}, null);
     register("M27", () => raw(host.print.state() === "printing" ? "SD printing byte " + Math.round(host.print.progress() * 412844) + "/412844" : "Not SD printing."), null);

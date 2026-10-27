@@ -59,6 +59,7 @@ const CSS = `
 .qs-dialog { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 5; }
 .qs-dialog > div { background: #232426; border: 1px solid #303030; border-radius: 12px; padding: 18px 20px; width: 380px; display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
 .qs-dialog .btns { display: flex; gap: 10px; width: 100%; } .qs-dialog .btns button { flex: 1; padding: 10px !important; font-size: 17px; }
+.qs-dialog .qs-link { background: none !important; border: 0 !important; color: #8ab4f8; font-size: 14px; padding: 2px !important; text-decoration: underline; }
 .qs .primary { background: #d9d9d9 !important; color: #1a1a1a !important; border-color: #d9d9d9 !important; font-weight: 600; }
 .qs-job { gap: 10px; }
 .qs-job .top { display: flex; gap: 16px; align-items: center; }
@@ -184,14 +185,15 @@ export function createScreen(frame, api) {
         <div class="btns"><button data-a="close">Cancel</button><button class="primary" data-a="print">Print</button></div></div></div>` : ""}
       ${u ? `<div class="qs-dialog"><div>${thumb(u.colours)}<b>${esc(u.name)}</b>
         <span class="muted" style="line-height:1.6">Sliced for Quadro with OrcaSlicer<br>Print time ${fmtTime(u.time_s)} · ${u.toolchanges} toolchanges<br>Part ${g(u.part)} · prime tower ${g(u.tower)}</span>
-        <span class="muted" style="font-size:12px">This online printer prints the demo cube; your G-code is ready to download.</span>
-        <div class="btns"><button data-a="close">Close</button>${u.gcode ? `<button class="primary" data-a="download">Download G-code</button>` : ""}</div></div></div>` : ""}`;
+        <span class="muted" style="font-size:12px">The printer plays this file's toolpath layer by layer; 10× playback and Skip speed it up.</span>
+        <div class="btns"><button data-a="close">Close</button>${u.toolpath ? `<button class="primary" data-a="print-up">Print</button>` : ""}</div>
+        ${u.gcode ? `<button class="qs-link" data-a="download">Download G-code</button>` : ""}</div></div>` : ""}`;
     },
     job() {
       const s = st(), pct = Math.floor(s.progress * 100), C = 2 * Math.PI * 54;
       const left = s.progress > 0.01 ? s.elapsed / s.progress - s.elapsed : 0;
       return `<div class="qs-job" style="display:flex;flex-direction:column;flex:1">
-        <div class="row">${thumb()}<div><b style="font-size:17px">${FILE}</b><div class="muted" style="font-size:13px">${s.job === "paused" ? "Paused" : "Printing"}${s.active >= 0 ? " · Tool " + (s.active + 1) : ""}</div></div></div>
+        <div class="row">${thumb(s.colours || undefined)}<div><b style="font-size:17px">${esc(s.file || FILE)}</b><div class="muted" style="font-size:13px">${s.job === "paused" ? "Paused" : "Printing"}${s.active >= 0 ? " · Tool " + (s.active + 1) : ""}</div></div></div>
         <div class="top"><div class="qs-ring"><svg viewBox="0 0 128 128"><circle cx="64" cy="64" r="54" fill="none" stroke="#3a3c40" stroke-width="10"/>
           <circle cx="64" cy="64" r="54" fill="none" stroke="#6e9753" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - s.progress)}"/></svg><b>${pct}%</b></div>
           <div class="qs-stats"><div><span>Layer</span><b>${s.layer} / ${s.layers}</b></div><div><span>Toolchanges</span><b>${s.changes}</b></div>
@@ -204,7 +206,7 @@ export function createScreen(frame, api) {
     complete() {
       const s = st();
       return `<div class="qs-stage"><img src="${A("stage-done.png")}" alt="" style="width:56px;height:56px"><h3>Print complete</h3>
-        <p>${FILE}<br>${fmtTime(s.elapsed)} · ${s.changes} toolchanges</p>
+        <p>${esc(s.file || FILE)}<br>${fmtTime(s.elapsed)} · ${s.changes} toolchanges</p>
         <p class="muted" style="font-size:14px">Remove the part from the build plate before the next print.</p>
         <div class="row"><button class="qs-big" data-a="clear">Plate cleared</button></div></div>`;
     },
@@ -306,6 +308,12 @@ export function createScreen(frame, api) {
       case "close": sub = null; rendered = ""; render(); break;
       case "download": { const u = uploads()[sub]; if (u && u.gcode) window.open(u.gcode, "_blank", "noopener"); break; }
       case "print": send("SDCARD_PRINT_FILE FILENAME=" + FILE); go("home"); break;
+      case "print-up": {
+        const u = uploads()[sub];
+        if (printing()) { toast("A print is already running"); break; }
+        if (u) { sub = null; send("SDCARD_PRINT_FILE FILENAME=" + u.name); go("home"); }
+        break;
+      }
       case "pause": send("PAUSE"); break;
       case "resume": send("RESUME"); break;
       case "cancel": sub = "cancel"; rendered = ""; render(); break;

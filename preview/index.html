@@ -132,7 +132,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
       <section class="card">
         <h2>Print job <small id="pct">0%</small></h2>
         <div class="body">
-          <div class="file">alignment_test_cube.gcode</div>
+          <div class="file" id="d-file">alignment_test_cube.gcode</div>
           <div class="bar"><i id="bar"></i></div>
           <div class="kv">
             <div><span>Layer</span><b id="d-layer">1 / 100</b></div>
@@ -303,6 +303,22 @@ function layerJobs(layer, first) {
   const tier = Math.floor(layer / PER_TIER), start = first < 0 ? 0 : first;
   return [0, 1, 2, 3].map((k) => (start + k) % 4).map((tool) => ({ tool, q: quadOf(tier, tool) }));
 }
+// ---------- or a model sliced on the page ("Slice your model"), printed from the touch screen: its toolpath per layer ----------
+let custom = null;                                                // { name, colours, layers: [{ z, runs: [{ tool, tower, path }] }] }
+const layerCount = () => (custom ? custom.layers.length : LAYERS);
+const jobsOf = (L, first) => (custom ? custom.layers[L].runs : layerJobs(L, first));
+const colourOf = (tool) => (custom && custom.colours[tool]) || COLORS[tool];
+const DEMO_FILE = "alignment_test_cube.gcode";
+const fileName = () => (custom ? custom.name : DEMO_FILE);
+function progressNow() { return job === "done" || phase.kind === "done" ? 1 : Math.min(1, (layer + (jobs.length ? jobAt / jobs.length : 0)) / layerCount()); }
+// the server sends runs as [tool, tower?, x0, y0, dx1, dy1, ...] in tenths of a millimetre
+function decodeToolpath(tp) {
+  return tp.layers.map(([z, runs]) => ({ z, runs: runs.map((r) => {
+    const path = []; let x = 0, y = 0;
+    for (let i = 2; i < r.length; i += 2) { x = i === 2 ? r[i] : x + r[i]; y = i === 2 ? r[i + 1] : y + r[i + 1]; path.push([x / 10, y / 10]); }
+    return { tool: r[0], tower: r[1] === 1, path };
+  }) })).filter((l) => l.runs.length);
+}
 const lengthOf = (p) => p.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
 const pointAlong = (p, d) => { for (let i = 1; i < p.length; i++) { const L = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (d <= L) { const f = L ? d / L : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * f, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * f]; } d -= L; } return p[p.length - 1]; };
 
@@ -376,6 +392,28 @@ const zGroup = new THREE.Group(), bedGroup = new THREE.Group(), headGroups = [0,
 let center = new THREE.Vector3(), radius = 1;
 const trails = new THREE.Group();
 bedGroup.add(trails);
+// what a sliced model has printed so far: one line mesh per layer, filled run by run
+const printed = new THREE.Group();
+bedGroup.add(printed);
+const layerMeshes = [];
+function bakeRun(L, run) {
+  let m = layerMeshes[L];
+  if (!m) {
+    const n = 2 * custom.layers[L].runs.reduce((s, r) => s + r.path.length - 1, 0), geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * n), 3));
+    geo.setDrawRange(0, 0);
+    m = layerMeshes[L] = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ vertexColors: true })); m.n = 0; m.frustumCulled = false;
+    printed.add(m);
+  }
+  const pos = m.geometry.attributes.position, col = m.geometry.attributes.color, c = new THREE.Color(colourOf(run.tool)), y = (PEI_TOP + custom.layers[L].z) / 1000;
+  for (let i = 1; i < run.path.length; i++) for (const [px, py] of [run.path[i - 1], run.path[i]]) {
+    if (m.n >= pos.count) break;
+    pos.setXYZ(m.n, -(PRINT_SX0 + px) / 1000, y, (PRINT_Z0 + py) / 1000); col.setXYZ(m.n++, c.r, c.g, c.b);
+  }
+  pos.needsUpdate = col.needsUpdate = true; m.geometry.setDrawRange(0, m.n); dirty = true;
+}
+function clearPrinted() { for (const m of layerMeshes) if (m) { printed.remove(m); m.geometry.dispose(); m.material.dispose(); } layerMeshes.length = 0; }
 
 const plugs = [], caps = [], capParts = [], headLeds = [];
 // move an object by a world-space offset (mm), whatever its parent's frame
@@ -867,7 +905,7 @@ function log(text, cls = "") {
   consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 const EXTRUDER = ["extruder", "extruder1", "extruder2", "extruder3"];
-const zNow = () => (layer + 1) * LAYER_H;
+const zNow = () => (custom ? custom.layers[layer].z : (layer + 1) * LAYER_H);
 let queue = [], bandAt = 0;
 const phys = (x) => x - PRINT_SX0;                                  // sx -> printer X
 function changePhases(next, [px, py]) {
@@ -908,13 +946,13 @@ function extrudePhase(kind, path, onEnd) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * (Math.ceil(this.plan.L / 0.5) + path.length + 10)), 3));
       geo.setDrawRange(0, 0);
-      this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: COLORS[active] })); this.n = 0;
+      this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: colourOf(active) })); this.n = 0;
       trails.add(this.line); this.point(...path[0]);
     },
     point(px, py) {
       const pos = this.line.geometry.attributes.position;
       if (this.n >= pos.count) return;
-      pos.setXYZ(this.n++, -(PRINT_SX0 + px) / 1000, (PEI_TOP + (layer + 1) * LAYER_H) / 1000, (PRINT_Z0 + py) / 1000);
+      pos.setXYZ(this.n++, -(PRINT_SX0 + px) / 1000, (PEI_TOP + zNow()) / 1000, (PRINT_Z0 + py) / 1000);
       pos.needsUpdate = true; this.line.geometry.setDrawRange(0, this.n);
     },
     run(t) {
@@ -928,16 +966,24 @@ function extrudePhase(kind, path, onEnd) {
 }
 function nextJob() {
   if (jobAt >= jobs.length) {
-    if (layer + 1 >= LAYERS) {
+    if (layer + 1 >= layerCount()) {
       phase = { kind: "done", t: 0, T: 0, run() {} }; job = "done"; log("// Done printing file", "r");
       if (K) { K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] }); K.run("TURN_OFF_HEATERS"); }
       return;
     }
-    layer++; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0;
+    layer++; done.clear(); jobs = jobsOf(layer, active); jobAt = 0; bandAt = 0;
     log(";LAYER_CHANGE  Z" + zNow().toFixed(2), "c");
   }
-  const next = jobs[jobAt++], path = blockPath(next.q, layer);
+  const next = jobs[jobAt++];
   queue = [];
+  if (custom) {                                                   // a sliced model: its runs in order; the tower is part of them
+    const L = layer;
+    if (next.tool !== active) queue.push(...changePhases(next.tool, next.path[0]));
+    queue.push(travelPhase(next.path[0]));
+    queue.push(extrudePhase(next.tower ? "purge" : "print", next.path, () => bakeRun(L, next)));
+    return advance();
+  }
+  const path = blockPath(next.q, layer);
   if (next.tool !== active) {
     if (active < 0) queue.push(...changePhases(next.tool, path[0]));
     else {
@@ -1009,7 +1055,7 @@ function growBlocks() {
     const below = tier * PER_TIER;
     let n = Math.max(0, Math.min(PER_TIER, layer - below + (done.has(q) && Math.floor(layer / PER_TIER) === tier ? 1 : 0)));
     if (layer >= below + PER_TIER) n = PER_TIER;
-    mesh.visible = n > 0 && !bedCleared;
+    mesh.visible = n > 0 && !bedCleared && !custom;
     if (n > 0) { const h = n * LAYER_H; mesh.scale.y = h / 1000; mesh.position.y = (PEI_TOP + tier * TIER + h / 2) / 1000; }
   }
   dirty = true;
@@ -1019,26 +1065,31 @@ function growBlocks() {
 let bedCleared = false;
 function clearBed() {
   if (job === "printing" || saved) submit("CANCEL_PRINT");
-  bedCleared = true; trails.visible = tower.visible = false;
+  bedCleared = true; trails.visible = tower.visible = printed.visible = false;
   for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
   meshDots.clear(); growBlocks();
   if (job === "done" || job === "stopped") { job = "standby"; if (phase.kind === "done") phase = { kind: "ready", t: 0, T: 0, run() {} }; }
   log("; bed cleared", "c");
 }
 function restart(toLayer = 0, quiet = false) {
-  bedCleared = false; trails.visible = tower.visible = true;
+  bedCleared = false; trails.visible = tower.visible = printed.visible = true; clearPrinted();
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
   phase.end = null; queue = []; cmdQueue = []; saved = null; handover = null; pendingLines = [];
   job = "printing";
   if (K) K.abort();
   if (K) { if (K.isShutdown()) K.run("FIRMWARE_RESTART"); K.setHeaters({ extruder: 220, extruder1: 220, extruder2: 220, extruder3: 220, heater_bed: 60 }); }
   // place the heads as the printer would have them: the active tool over the part, the others parked either side
-  active = fillTower(toLayer); setActive(active);
-  sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
-  if (active >= 0) ny = CUBE_Y0;
-  layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle", t: 0, T: 0, run() {} };
+  if (custom) {                                                   // the layers below the one we start at are already printed
+    tower.count = 0; active = -1;
+    for (let L = 0; L < toLayer; L++) for (const r of custom.layers[L].runs) { bakeRun(L, r); active = r.tool; }
+  } else active = fillTower(toLayer);
+  setActive(active);
+  const [startX, startY] = custom ? custom.layers[toLayer].runs[0].path[0] : [CUBE_X0, CUBE_Y0];
+  sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + startX));
+  if (active >= 0) ny = startY;
+  layer = toLayer; done.clear(); jobs = jobsOf(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle", t: 0, T: 0, run() {} };
   for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
-  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); if (!quiet) log("SDCARD_PRINT_FILE FILENAME=alignment_test_cube.gcode", "c"); }
+  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); if (!quiet) log("SDCARD_PRINT_FILE FILENAME=" + fileName(), "c"); }
   else log("; skipped to layer " + (toLayer + 1), "c");
   lastPos = null; vel = 0;
   growBlocks(); draw(); run();
@@ -1046,7 +1097,7 @@ function restart(toLayer = 0, quiet = false) {
 function draw() {
   headGroups.forEach((g, j) => (g.position.x = -(sx[j] - SX0[j]) / 1000));
   bedGroup.position.z = (NOZZLE_Z - (PRINT_Z0 + ny)) / 1000;
-  zGroup.position.y = ((layer + 1) * LAYER_H + hop - NOZZLE_DROP) / 1000;
+  zGroup.position.y = (zNow() + hop - NOZZLE_DROP) / 1000;
   if (runs.length) { updateRuns(); pressCaps(); updateBedCable(); }
   dirty = true;
 }
@@ -1061,15 +1112,15 @@ let vel = 0, lastPos = null;
 function set(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 function report() {
   const z = zNow() + hop, k = phase.kind;
-  let text = "Layer " + (layer + 1) + "/" + LAYERS + " · ";
+  let text = "Layer " + (layer + 1) + "/" + layerCount() + " · ";
   if (k === "change") text += "Toolchange " + (phase.tc.prev < 0 ? "start" : "T" + phase.tc.prev) + " → T" + phase.tc.next;
   else if (job !== "printing" && job !== "done") text = [job === "paused" ? "Paused" : job === "stopped" ? "Cancelled" : "", stateName()].filter((s, i, all) => s && all.indexOf(s) === i).join(" · ") + (active >= 0 ? " · T" + active : "");
   else if (k === "done") text = "Print complete";
   else if (active >= 0) text += "T" + active + " " + (STATE[k] || "").toLowerCase();
   if (readout.textContent !== text) readout.innerHTML = "<b>" + text + "</b>";
-  const progress = k === "done" ? 1 : (layer + jobAt / 4) / LAYERS;
+  const progress = progressNow();
   set("pct", Math.floor(progress * 100) + "%"); $("bar").style.width = (progress * 100).toFixed(1) + "%";
-  set("d-layer", (layer + 1) + " / " + LAYERS); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
+  set("d-layer", (layer + 1) + " / " + layerCount()); set("d-file", fileName()); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
   set("d-state", stateName()); set("d-tool", active < 0 ? "—" : "T" + active);
   set("d-x", active < 0 ? "—" : fmt(phys(sx[active]), 2)); set("d-y", fmt(ny, 2)); set("d-z", fmt(z, 2));
   set("d-v", fmt(vel) + " mm/s"); set("d-purge", fmt(stats.purge) + " mm³");
@@ -1147,8 +1198,13 @@ const host = {
   lastPlan: showPlan,
   print: {
     state: () => (job === "printing" || job === "paused" ? "printing" : job === "done" ? "complete" : job === "stopped" ? "cancelled" : "standby"),
-    filename: () => (job === "stopped" && !saved ? "" : "alignment_test_cube.gcode"), duration: () => stats.time, progress: () => Math.min(1, (layer + jobAt / 4) / LAYERS), layers: () => [layer + 1, LAYERS],
-    start: () => { restart(0, true); setPlaying(true); K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] }); }, cancel: () => stopPrint("stopped"),
+    filename: () => (job === "stopped" && !saved ? "" : fileName()), duration: () => stats.time, progress: progressNow, layers: () => [layer + 1, layerCount()],
+    files: () => [DEMO_FILE, ...sliced.filter((u) => u.toolpath).map((u) => u.name)],
+    start: (f) => {
+      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, layers: u.layers }) : null; }
+      restart(0, true); setPlaying(true); K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
+    },
+    cancel: () => stopPrint("stopped"),
   },
 };
 function stopPrint(kind) {
@@ -1258,7 +1314,7 @@ const ASK_URL = "https://quadro-ask.huseyin-926.workers.dev";
 const askLog = $("ask-log"), askForm = $("ask-form"), askInput = $("ask"), askHistory = [];
 function askState() {
   const xs = sx.map((x, j) => "T" + j + " " + (x - PRINT_SX0).toFixed(1)).join(", ");
-  return "Print: " + (job === "printing" ? (playing ? "printing" : "paused") + ", layer " + (layer + 1) + " of " + LAYERS : job) +
+  return "Print: " + (job === "printing" ? (playing ? "printing" : "paused") + " " + fileName() + ", layer " + (layer + 1) + " of " + layerCount() : job) +
     ". Active tool: " + (active < 0 ? "none" : "T" + active) + ". Carriage X (mm): " + xs + ". Bed Y: " + ny.toFixed(1) + ".";
 }
 // plain text with **bold** and `code`; code that names a command becomes a button that fills the console
@@ -1310,8 +1366,8 @@ const screen = createScreen($("qscreen"), {
   state: () => {
     const k = K && K.state();
     return {
-      job, active, layer: layer + 1, layers: LAYERS, changes: stats.changes, elapsed: stats.time,
-      progress: job === "done" ? 1 : Math.min(1, (layer + jobAt / 4) / LAYERS),
+      job, active, layer: layer + 1, layers: layerCount(), changes: stats.changes, elapsed: stats.time, progress: progressNow(),
+      file: fileName(), colours: custom ? custom.colours : null,
       heaters: K ? K.heaters() : null, homed: k ? [...k.homed] : [], fan: k && active >= 0 ? k.fans["fan_generic fan_t" + active] : 0,
     };
   },
@@ -1348,9 +1404,11 @@ sliceForm.addEventListener("submit", async (e) => {
     showSlice(r);
     const q = r.printers.quadro;
     if (!q.error) {
-      sliced.unshift({ name: file.name.replace(/\.(3mf|stl)$/i, "") + ".gcode", colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
+      const name = file.name.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
+      sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
+      sliced.unshift({ name, colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
       screen.go("files");
-      sliceStatus.textContent = "Done. The Quadro file is on the printer screen below.";
+      sliceStatus.textContent = "Done. The Quadro file is on the printer screen below; tap it to print it.";
     } else sliceStatus.textContent = "Done.";
   } catch (err) {
     sliceStatus.className = "slice-status e";
@@ -1385,7 +1443,7 @@ controls.addEventListener("change", run);
 // ---------- controls ----------
 function setPlaying(on) { playing = on; run(); }
 document.getElementById("clear-bed").addEventListener("click", clearBed);
-document.getElementById("skip").addEventListener("click", () => { if (job === "printing" && phase.kind !== "done") { restart(Math.min(LAYERS - 1, layer + 10)); setPlaying(true); } });
+document.getElementById("skip").addEventListener("click", () => { if (job === "printing" && phase.kind !== "done") { restart(Math.min(layerCount() - 1, layer + 10)); setPlaying(true); } });
 document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 document.querySelectorAll("[data-speed]").forEach((b) => b.addEventListener("click", () => {
   cfg.scale = Number(b.dataset.speed);
