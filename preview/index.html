@@ -1335,12 +1335,16 @@ sliceForm.addEventListener("submit", async (e) => {
   const file = sliceFile.files[0];
   if (!file || sliceForm.dataset.busy) return;
   if (!SLICER_URL) { sliceStatus.className = "slice-status e"; sliceStatus.textContent = "The slicing service is not online yet."; return; }
-  sliceForm.dataset.busy = "1"; sliceStatus.className = "slice-status"; sliceStatus.textContent = "Slicing " + file.name + " for three printers…"; sliceOut.innerHTML = "";
+  sliceForm.dataset.busy = "1"; sliceStatus.className = "slice-status"; sliceOut.innerHTML = "";
+  // a detailed painted model takes the slicer a few minutes, so show how long it has been working
+  const t0 = Date.now(), tick = () => { const s = Math.round((Date.now() - t0) / 1000);
+    sliceStatus.textContent = "Slicing " + file.name + " for three printers… " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + (s > 20 ? " (detailed or painted models can take a few minutes)" : ""); };
+  tick(); const clock = setInterval(tick, 1000);
   try {
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 300000);
-    const res = await fetch(SLICER_URL + "/slice", { method: "POST", headers: { "X-Filename": file.name.replace(/[^\w.\- ]/g, "_") }, body: file, signal: ctl.signal }).finally(() => clearTimeout(timer));
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 900000);
+    const res = await fetch(SLICER_URL + "/slice", { method: "POST", headers: { "X-Filename": file.name.replace(/[^\w.\- ]/g, "_") }, body: file, signal: ctl.signal }).finally(() => { clearTimeout(timer); clearInterval(clock); });
     const r = await res.json().catch(() => ({}));
-    if (!res.ok || r.error || !r.printers) throw new Error(r.error || "The slicing service is unavailable right now.");
+    if (!res.ok || r.error || !r.printers) throw new Error(r.error || (res.status === 504 ? "Slicing took too long for this model." : "The slicing service is unavailable right now."));
     showSlice(r);
     const q = r.printers.quadro;
     if (!q.error) {
