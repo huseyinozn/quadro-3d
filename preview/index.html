@@ -270,7 +270,9 @@ const COVER_HOLES = {
   right: { top: 123.5, x: -347.0, cx: -345.8, ptfe: [229.5, 251.0], cable: [211.5, 268.9] },
 };
 const COVER_BOTTOM = 27;                                          // underside of the side covers
-const HOLDER_PTFE = [[307, 205, 365], [227, 205, 365], [-250, 205, 365], [-170, 205, 365]];
+// The white push-fit couplers under the filament guide bar of each spool holder (Quadro-z-inject-plastic-13, measured
+// from the CAD mesh): x, y of the bore, and z of their front face, where the PTFE goes in; the filament leaves at the back.
+const HOLDER_PTFE = [[328.3, 191, 355.6], [268.3, 191, 355.6], [-271.5, 191, 355.6], [-211.4, 191, 355.6]], COUPLER_LEN = 20;
 const INLET = [189, 176], PLUG = [192, 210];
 // Screen glass of the 4.3" display and the logo printed on the PEI sheet.
 const LCD_GLASS = { x0: -290, x1: -176, y0: -64, y1: 12, z: 32.6 };
@@ -359,7 +361,7 @@ new ResizeObserver(resize).observe(stage);
 const MAT = {
   head: new THREE.MeshStandardMaterial({ color: 0x25282c, roughness: 0.55, metalness: 0.1 }),
   dock: new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.2 }),
-  alu: new THREE.MeshStandardMaterial({ color: 0xd4d7da, roughness: 0.38, metalness: 0.55 }),
+  alu: new THREE.MeshStandardMaterial({ color: 0xe6e9ec, roughness: 0.3, metalness: 0.45 }),   // clear-anodised aluminium
   rail: new THREE.MeshStandardMaterial({ color: 0x8e949a, roughness: 0.28, metalness: 0.9 }),
   motor: new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.45, metalness: 0.5 }),
   cap: new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.1 }),
@@ -544,13 +546,12 @@ function buildRuns() {
   scene.add(bedCable);
   updateRuns();
 }
-// rubber grommets and brass push-fits where cables and PTFE enter the side covers and the head tops
+// black rubber grommets where cables and PTFE enter the side covers and the head tops
 function addGrommets() {
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.7 }), brass = new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.3, metalness: 0.85 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.7 });
   const ring = (parent, x, y, z, r, t, m, oval = 1) => { const o = new THREE.Mesh(new THREE.TorusGeometry(r / 1000, t / 1000, 10, 28), m); o.rotation.x = -Math.PI / 2; o.scale.x = oval; o.position.copy(v3(x, y, z)); parent.add(o); };
-  const fit = (parent, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 24, 1, true), brass); o.position.copy(v3(x, y + 1.5, z)); parent.add(o); ring(parent, x, y + 3.5, z, 4.5, 0.9, brass); };
   for (const H of Object.values(COVER_HOLES)) {
-    for (const z of H.ptfe) fit(zGroup, H.x, H.top, z);
+    for (const z of H.ptfe) ring(zGroup, H.x, H.top + 0.6, z, 4.2, 1.3, rubber);
     for (const z of H.cable) ring(zGroup, H.cx, H.top + 0.6, z, 4.6, 1.3, rubber, 1.35);
   }
   headGroups.forEach((g, j) => {
@@ -592,9 +593,10 @@ function updateRuns() {
       v3(mid, INLET[0] + 75 + z, 205), v3(ex, ey + 45 + z, ez), v3(ex, ey + z, ez),
       // straight down through the side cover, out of its underside directly below the entry
       v3(ex, ey - 50 + z, ez), v3(ex, COVER_BOTTOM + z, ez), v3(ex, COVER_BOTTOM - 25 + z, ez + 8),
-      v3(ex + s * 15, COVER_BOTTOM - 30 + z, ez + 60), v3(hpx, hpy - 70, hpz - 25), v3(hpx, hpy - 25, hpz), v3(hpx, hpy, hpz), feed,
+      v3(ex + s * 15, COVER_BOTTOM - 30 + z, ez + 60), v3(hpx, hpy - 40, hpz - 70), v3(hpx, hpy, hpz - 25), v3(hpx, hpy, hpz),
     ];
-    tube(r.ptfe, ptfe, 2.0); tube(r.fil, ptfe, 0.9);
+    // the tube ends in the coupler; the filament carries on through it and up to the spool
+    tube(r.ptfe, ptfe, 2.0); tube(r.fil, [...ptfe, v3(hpx, hpy, hpz + COUPLER_LEN), feed], 0.9);
     const cable = [
       v3(hx, PLUG[0] + z, PLUG[1]), v3(hx, PLUG[0] + 35 + z, PLUG[1] + 6),
       v3(mid, INLET[0] + 62 + z, (PLUG[1] + cz) / 2), v3(cx, ey + 40 + z, cz), v3(cx, ey + z, cz), v3(cx, ey - 12 + z, cz),
@@ -671,14 +673,14 @@ loadModel().then((gltf) => {
   headGroups.forEach((g, j) => {
     zGroup.add(g);
     const head = byId[HEAD_IDS[j]];
-    // each tool gets its own materials so the printing one can glow, plus an LED strip like the real cover
-    head.traverse((o) => { if (o.isMesh) o.material = o.material.clone(); });
+    // each tool gets its own materials so the printing one can glow. The clear light pipe in the front cover
+    // (Quadro-x-inject-plastic-16) shows the RGB LED behind it, lit in the colour of the loaded filament.
+    head.traverse((o) => {
+      if (!o.isMesh) return;
+      if (/x-inject-plastic-16(_\d+)?$/.test(o.name)) { o.material = new THREE.MeshBasicMaterial({ color: COLORS[j], toneMapped: false }); headLeds[j] = o; }
+      else o.material = o.material.clone();
+    });
     g.attach(head);
-    const hb = new THREE.Box3().setFromObject(head);
-    const led = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.003, 0.0008), new THREE.MeshBasicMaterial({ color: COLORS[j] }));
-    headLeds[j] = led;
-    led.position.set((hb.min.x + hb.max.x) / 2, hb.max.y - 0.032, hb.min.z - 0.0005);
-    g.add(led);
     head.traverse((o) => { if (!plugs[j] && /kablo/i.test(o.name)) plugs[j] = o; });
     if (plugs[j]) nudge(plugs[j], 0, -PLUG_DROP, 0);
   });
