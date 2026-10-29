@@ -63,6 +63,9 @@ export function createPrinter(CFG, host) {
   const zref = (BM.zero_reference_position || "150,150").split(",").map(Number);
   const bedZ = (x, y) => meshAt(x, y) - meshAt(zref[0], zref[1]);   // nozzle height where it touches the bed
 
+  // files on the printer: the demo cube, plus whatever the page sliced (host.print.files)
+  const sdFiles = () => (host.print.files ? host.print.files() : ["alignment_test_cube.gcode"]);
+
   // ---------- state ----------
   let st;
   function freshState(pose) {
@@ -852,7 +855,7 @@ export function createPrinter(CFG, host) {
     // fans, pins, LEDs
     register("M106", (g) => { st.fans["fan_generic fan_t" + activeTool()] = g.float("S", 255, { minval: 0 }) / 255; }, null);
     register("M107", () => { st.fans["fan_generic fan_t" + activeTool()] = 0; }, null);
-    register("SET_FAN_SPEED", (g) => { const f = "fan_generic " + g.get("FAN"); if (!(f in st.fans)) err("Unknown fan " + g.get("FAN")); st.fans[f] = g.float("SPEED", 0, { minval: 0, maxval: 1 }); }, "Sets the speed of a fan");
+    register("SET_FAN_SPEED", (g) => { const f = "fan_generic " + g.get("FAN"); if (!(f in st.fans)) err("Unknown fan " + g.get("FAN")); st.fans[f] = Math.min(1, g.float("SPEED", 0, { minval: 0 })); }, "Sets the speed of a fan");   // fan_generic clamps to max_power
     register("SET_PIN", (g) => { const p = g.get("PIN"); if (!(p in st.pins)) err("Unknown pin " + p); st.pins[p] = g.float("VALUE", 0, { minval: 0, maxval: 1 }); }, "Set the value of an output pin");
     register("SET_LED", (g) => {
       const name = g.get("LED"); if (!(name in st.leds)) err("Unknown LED " + name);
@@ -971,14 +974,14 @@ export function createPrinter(CFG, host) {
     register("CANCEL_PRINT", () => { queueCall(() => host.print.cancel()); st.paused = st.pauseSent = false; }, "Cancel the current print");
     register("SDCARD_PRINT_FILE", (g) => {
       const f = g.get("FILENAME").replace(/^\/+/, "");
-      if (f !== "alignment_test_cube.gcode") err("Unable to open file");
+      if (!sdFiles().includes(f)) err("Unable to open file");
       if (host.print.state() === "printing") err("SD busy");
-      queueCall(() => host.print.start());
+      queueCall(() => host.print.start(f));
     }, "Loads a SD file and starts the print.  May include files in subdirectories.");
     register("SDCARD_RESET_FILE", () => { if (host.print.state() === "printing") err("Cannot reset file while printing"); }, "Clears a loaded SD File. Stops the print if necessary");
-    register("M20", () => raw("Begin file list\nalignment_test_cube.gcode 412844\nEnd file list"), null);
-    register("M23", (g) => { const f = rawParams("M23", g.origline).trim(); if (f !== "alignment_test_cube.gcode") err("Unable to open file"); raw("File opened:" + f + " Size:412844\nFile selected"); }, null);
-    register("M24", function* () { if (st.paused) yield* runLine("RESUME"); else queueCall(() => host.print.start()); }, null);
+    register("M20", () => raw("Begin file list\n" + sdFiles().map((f) => f + " 412844").join("\n") + "\nEnd file list"), null);
+    register("M23", (g) => { const f = rawParams("M23", g.origline).trim(); if (!sdFiles().includes(f)) err("Unable to open file"); st.sdFile = f; raw("File opened:" + f + " Size:412844\nFile selected"); }, null);
+    register("M24", function* () { if (st.paused) yield* runLine("RESUME"); else queueCall(() => host.print.start(st.sdFile)); }, null);
     register("M25", function* () { yield* runLine("PAUSE"); }, null);
     register("M26", () => {}, null);
     register("M27", () => raw(host.print.state() === "printing" ? "SD printing byte " + Math.round(host.print.progress() * 412844) + "/412844" : "Not SD printing."), null);
@@ -1129,6 +1132,12 @@ export function createPrinter(CFG, host) {
     state: () => st,
     commandNames: () => [...commands.keys()].sort(),
     isShutdown: () => !!st.shutdown,
+    // a gcode_macro variable as plain text (the screen follows CALIBRATION_STATUS this way)
+    macroVar(macro, name) {
+      const m = [...macros.values()].find((x) => x.section.slice(12).toLowerCase() === macro.toLowerCase());
+      const v = m && m.vars.get(name);
+      return v == null ? null : String(v);
+    },
     bedZ,
   };
 }

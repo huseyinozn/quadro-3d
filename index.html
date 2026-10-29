@@ -60,7 +60,7 @@ button[data-play] { min-width: 104px; font-weight: 600; }
 .kv div { min-width: 0; }
 .kv span { display: block; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; }
 .kv b { font: 500 15px var(--mono); font-variant-numeric: tabular-nums; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; color: inherit; }
 th { text-align: left; font-weight: 500; font-size: 11px; color: var(--d-muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px 6px 0; }
 td { padding: 5px 6px 5px 0; border-top: 1px solid var(--d-line); font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 td:first-child { font-family: var(--sans); font-weight: 600; }
@@ -93,6 +93,14 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .ask-log .a { color: var(--d-ink); } .ask-log .a.e { color: #ff7b72; } .ask-log .a.wait { color: var(--d-muted); }
 .ask-log code { font: 12px var(--mono); background: var(--d-bg); border: 1px solid var(--d-line); border-radius: 4px; padding: 0 4px; }
 .ask-log button.code { min-height: 0; padding: 0 5px; font: 12px var(--mono); color: var(--d-accent); background: var(--d-bg); border: 1px dashed var(--d-line); border-radius: 4px; }
+.slice-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.slice-form input[type=file] { flex: 1; min-width: 0; color: var(--d-muted); font: 13px var(--sans); }
+.slice-form input[type=file]::file-selector-button { font: 500 13px var(--sans); color: var(--d-ink); background: var(--d-head); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 12px; margin-right: 10px; cursor: pointer; }
+.slice-form button { background: var(--d-accent); color: #fff; border-color: var(--d-accent); font-weight: 600; }
+.slice-note { margin: 8px 0 0; font-size: 12px; color: var(--d-muted); }
+.slice-status { margin: 10px 0 0; font-size: 14px; } .slice-status.e { color: #ff7b72; }
+#slice-out table { margin-top: 10px; } #slice-out td.best { color: #8fd18f; }
+#slice-out td small { display: block; font-size: 11px; color: var(--d-muted); font-family: var(--sans); font-weight: 400; }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
 @media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
 </style>
@@ -110,8 +118,6 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 
   <div class="desk">
     <div class="row">
-      <button id="play" data-play aria-pressed="true">Pause</button>
-      <button id="restart">Restart</button>
       <button id="skip">Skip 10 layers</button>
       <button id="clear-bed">Clear bed</button>
       <span class="label">Playback</span>
@@ -126,7 +132,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
       <section class="card">
         <h2>Print job <small id="pct">0%</small></h2>
         <div class="body">
-          <div class="file">alignment_test_cube.gcode</div>
+          <div class="file" id="d-file">alignment_test_cube.gcode</div>
           <div class="bar"><i id="bar"></i></div>
           <div class="kv">
             <div><span>Layer</span><b id="d-layer">1 / 100</b></div>
@@ -190,22 +196,36 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
       </section>
       <section class="card wide">
+        <h2>Slice your model <small>OrcaSlicer 2.4.2 · Bambu Lab A1 combo · Snapmaker U1 · Co Print Quadro</small></h2>
+        <div class="body">
+          <form class="slice-form" id="slice-form"><input type="file" id="slice-file" accept=".3mf,.stl" aria-label="Model file (3MF or STL)"><button type="submit">Slice for all three</button></form>
+          <p class="slice-note">Upload a 3MF with its colours assigned (up to 4), or an STL for one colour. Each printer uses its standard 0.20 mm profile with PLA. The Quadro file then appears on the printer screen below.</p>
+          <p class="slice-status" id="slice-status" aria-live="polite"></p>
+          <div id="slice-out"></div>
+        </div>
+      </section>
+      <section class="card wide">
+        <h2>Printer screen <small>QuadroScreen · tap it to print, move and calibrate · calibrations take real time, 10× playback speeds them up</small></h2>
+        <div class="body"><div id="qscreen"></div></div>
+      </section>
+      <section class="card wide">
         <h2>Ask about Quadro <small>answered by Claude · tap a command to put it in the console</small></h2>
         <div class="ask-log" id="ask-log" aria-live="polite"></div>
         <form class="cmdline" id="ask-form" autocomplete="off"><input id="ask" type="text" maxlength="600" placeholder="How does a toolchange work?" aria-label="Question about Quadro"><button type="submit">Ask</button></form>
       </section>
     </div>
-    <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower. The console runs the printer's own Klipper configuration, its macros and its toolchange, homing and calibration modules, right in the browser: anything typed there behaves as it would on the machine. Heaters and the bed surface are simulated (the bed follows the printer's saved mesh); load cell forces and accelerometer readings are not.</p>
+    <p class="about">A live simulation of Quadro's toolchanges. Motion timing comes from the printer's own Klipper configuration and its parallel-carriage toolchange planner: the parked heads clear the way while the next tool arrives, all in one synchronized move. The machine is the production CAD model; the print is a four-colour 20 mm alignment cube with a prime tower. The console runs the printer's own Klipper configuration, its macros and its toolchange, homing and calibration modules, right in the browser: anything typed there behaves as it would on the machine. The printer screen is Quadro's own touch screen software, rebuilt for the browser: its print, move, filament and calibration pages send the same commands to that console. Heaters and the bed surface are simulated (the bed follows the printer's saved mesh); load cell forces and accelerometer readings are not.</p>
   </div>
 </div>
 
-<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "quadro/klipper": "./klipper.js", "quadro/jinja": "./jinja.js"}}</script>
+<script type="importmap">{"imports": {"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/", "quadro/klipper": "./klipper.js", "quadro/jinja": "./jinja.js", "quadro/screen": "./screen.js"}}</script>
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createPrinter } from "quadro/klipper";
+import { createScreen } from "quadro/screen";
 const CONFIG_URL = "printer-config.json";
 
 // ---------- machine facts measured from the CAD export (mm, world: x across, y up, z front(-)/back(+)) ----------
@@ -250,7 +270,9 @@ const COVER_HOLES = {
   right: { top: 123.5, x: -347.0, cx: -345.8, ptfe: [229.5, 251.0], cable: [211.5, 268.9] },
 };
 const COVER_BOTTOM = 27;                                          // underside of the side covers
-const HOLDER_PTFE = [[307, 205, 365], [227, 205, 365], [-250, 205, 365], [-170, 205, 365]];
+// The white push-fit couplers under the filament guide bar of each spool holder (Quadro-z-inject-plastic-13, measured
+// from the CAD mesh): x, y of the bore, and z of their front face, where the PTFE goes in; the filament leaves at the back.
+const HOLDER_PTFE = [[328.3, 191, 355.6], [268.3, 191, 355.6], [-271.5, 191, 355.6], [-211.4, 191, 355.6]], COUPLER_LEN = 20;
 const INLET = [189, 176], PLUG = [192, 210];
 // Screen glass of the 4.3" display and the logo printed on the PEI sheet.
 const LCD_GLASS = { x0: -290, x1: -176, y0: -64, y1: 12, z: 32.6 };
@@ -283,6 +305,22 @@ function layerJobs(layer, first) {
   const tier = Math.floor(layer / PER_TIER), start = first < 0 ? 0 : first;
   return [0, 1, 2, 3].map((k) => (start + k) % 4).map((tool) => ({ tool, q: quadOf(tier, tool) }));
 }
+// ---------- or a model sliced on the page ("Slice your model"), printed from the touch screen: its toolpath per layer ----------
+let custom = null;                                                // { name, colours, layers: [{ z, runs: [{ tool, tower, path }] }] }
+const layerCount = () => (custom ? custom.layers.length : LAYERS);
+const jobsOf = (L, first) => (custom ? custom.layers[L].runs : layerJobs(L, first));
+const colourOf = (tool) => (custom && custom.colours[tool]) || COLORS[tool];
+const DEMO_FILE = "alignment_test_cube.gcode";
+const fileName = () => (custom ? custom.name : DEMO_FILE);
+function progressNow() { return job === "done" || phase.kind === "done" ? 1 : Math.min(1, (layer + (jobs.length ? jobAt / jobs.length : 0)) / layerCount()); }
+// the server sends runs as [tool, tower?, x0, y0, dx1, dy1, ...] in tenths of a millimetre
+function decodeToolpath(tp) {
+  return tp.layers.map(([z, runs]) => ({ z, runs: runs.map((r) => {
+    const path = []; let x = 0, y = 0;
+    for (let i = 2; i < r.length; i += 2) { x = i === 2 ? r[i] : x + r[i]; y = i === 2 ? r[i + 1] : y + r[i + 1]; path.push([x / 10, y / 10]); }
+    return { tool: r[0], tower: r[1] === 1, outer: r[1] === 2, path };
+  }) })).filter((l) => l.runs.length);
+}
 const lengthOf = (p) => p.slice(1).reduce((s, q, i) => s + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
 const pointAlong = (p, d) => { for (let i = 1; i < p.length; i++) { const L = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (d <= L) { const f = L ? d / L : 0; return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * f, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * f]; } d -= L; } return p[p.length - 1]; };
 
@@ -290,9 +328,9 @@ const TOWER = { x0: 12, y0: 255, w: 35 };                        // back left co
 const BAND_D = Math.ceil(PURGE_VOL / (LINE_W * LAYER_H * TOWER.w)) * LINE_W;   // one toolchange's purge, mm deep
 // travel: PHYS_TOOL_n ends with G1 F18000, so moves after a toolchange run at 300 mm/s until the slicer sets a feed
 const cfg = { tcSpeed: TC.speed, tcAccel: TC.accel, travel: 300, accel: LIMITS.a, print: 350, scale: 1 };
-let sx = [LP[0], LP[1], RP[1], RP[2]], ny = 2, hop = 0, active = -1, phase = { kind: "idle" };
+let sx = [LP[0], LP[1], RP[1], RP[2]], ny = 2, hop = 0, active = -1, phase = { kind: "ready", t: 0, T: 0, run() {} };
 let layer = 0, jobs = layerJobs(0, -1), jobAt = 0, done = new Set(), stats = { changes: 0, time: 0, purge: 0 };
-let playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+let playing = true;
 const fmt = (v, n = 0) => (Math.abs(v) < 0.5 * 10 ** -n ? 0 : v).toFixed(n);
 
 // ---------- three.js scene ----------
@@ -323,7 +361,7 @@ new ResizeObserver(resize).observe(stage);
 const MAT = {
   head: new THREE.MeshStandardMaterial({ color: 0x25282c, roughness: 0.55, metalness: 0.1 }),
   dock: new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.2 }),
-  alu: new THREE.MeshStandardMaterial({ color: 0xd4d7da, roughness: 0.38, metalness: 0.55 }),
+  alu: new THREE.MeshStandardMaterial({ color: 0xe6e9ec, roughness: 0.3, metalness: 0.45 }),   // clear-anodised aluminium
   rail: new THREE.MeshStandardMaterial({ color: 0x8e949a, roughness: 0.28, metalness: 0.9 }),
   motor: new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.45, metalness: 0.5 }),
   cap: new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.1 }),
@@ -356,6 +394,72 @@ const zGroup = new THREE.Group(), bedGroup = new THREE.Group(), headGroups = [0,
 let center = new THREE.Vector3(), radius = 1;
 const trails = new THREE.Group();
 bedGroup.add(trails);
+// what a sliced model has printed so far, filled run by run. Per layer, one line mesh for what is inside the part and
+// one shaded mesh for the outer walls: each wall line is a bead (0.42 mm wide, the layer high) with rounded normals,
+// so the light picks out the layer lines and the surface texture the way the slicer's preview does.
+const printed = new THREE.Group();
+bedGroup.add(printed);
+const layerMeshes = [], BEAD_W = 0.42;
+const lineMat = new THREE.LineBasicMaterial({ vertexColors: true });
+const beadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, side: THREE.DoubleSide });
+function layerMesh(L) {
+  if (layerMeshes[L]) return layerMeshes[L];
+  let nl = 0, nb = 0;
+  for (const r of custom.layers[L].runs) if (r.outer) nb += r.path.length; else nl += 2 * (r.path.length - 1);
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * nl), 3));
+  lg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(3 * nl), 3));
+  lg.setDrawRange(0, 0);
+  const lines = new THREE.LineSegments(lg, lineMat); lines.n = 0; lines.frustumCulled = false;
+  const bg = new THREE.BufferGeometry();                           // 4 vertices per wall point: the bead's cross-section
+  for (const a of ["position", "normal", "color"]) bg.setAttribute(a, new THREE.BufferAttribute(new Float32Array(12 * nb), 3));
+  bg.setIndex(new THREE.BufferAttribute(new Uint32Array(18 * Math.max(0, nb - 1)), 1));
+  bg.setDrawRange(0, 0);
+  const beads = new THREE.Mesh(bg, beadMat); beads.v = 0; beads.i = 0; beads.frustumCulled = false;
+  printed.add(lines, beads);
+  return (layerMeshes[L] = { lines, beads });
+}
+function bakeRun(L, run) {
+  const { lines, beads } = layerMesh(L), c = new THREE.Color(colourOf(run.tool)), z = custom.layers[L].z, y = (PEI_TOP + z) / 1000;
+  const wx = (px) => -(PRINT_SX0 + px) / 1000, wz = (py) => (PRINT_Z0 + py) / 1000;
+  if (!run.outer) {
+    const pos = lines.geometry.attributes.position, col = lines.geometry.attributes.color;
+    for (let i = 1; i < run.path.length; i++) for (const [px, py] of [run.path[i - 1], run.path[i]]) {
+      if (lines.n >= pos.count) break;
+      pos.setXYZ(lines.n, wx(px), y, wz(py)); col.setXYZ(lines.n++, c.r, c.g, c.b);
+    }
+    pos.needsUpdate = col.needsUpdate = true; lines.geometry.setDrawRange(0, lines.n); dirty = true;
+    return;
+  }
+  const g = beads.geometry, pos = g.attributes.position, nor = g.attributes.normal, col = g.attributes.color, idx = g.index, P = run.path, n = P.length;
+  const h = Math.min(0.4, Math.max(0.05, z - (L ? custom.layers[L - 1].z : 0))) / 1000, half = BEAD_W / 2000, v0 = beads.v;
+  if (v0 + 4 * n > pos.count) return;
+  for (let i = 0; i < n; i++) {
+    // across the bead: perpendicular to the path, averaged at corners
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1]; const t = Math.hypot(tx, ty) || 1; tx /= t; ty /= t;
+    const sx = -wx(0) + wx(-ty), sz = wz(tx) - wz(0), x = wx(P[i][0]), zz = wz(P[i][1]);   // side direction in the scene
+    const k = Math.hypot(sx, sz) || 1, ux = sx / k, uz = sz / k;
+    // left bottom, left top, right top, right bottom; the top normals lean out so the bead reads round
+    const ring = [[-1, -h, -1, 0], [-0.8, 0, -0.6, 0.8], [0.8, 0, 0.6, 0.8], [1, -h, 1, 0]];
+    ring.forEach(([o, dy, no, ny], j) => {
+      const v = v0 + 4 * i + j;
+      pos.setXYZ(v, x + ux * half * o, y + dy, zz + uz * half * o);
+      nor.setXYZ(v, ux * no, ny, uz * no);
+      col.setXYZ(v, c.r, c.g, c.b);
+    });
+    if (i) for (let j = 0; j < 3; j++) {                            // left side, top, right side between this point and the last
+      const p0 = v0 + 4 * (i - 1) + j, p1 = p0 + 1, q0 = p0 + 4, q1 = p1 + 4;
+      idx.array.set([p0, q0, p1, p1, q0, q1], beads.i); beads.i += 6;
+    }
+  }
+  beads.v += 4 * n;
+  pos.needsUpdate = nor.needsUpdate = col.needsUpdate = idx.needsUpdate = true; g.setDrawRange(0, beads.i); dirty = true;
+}
+function clearPrinted() {
+  for (const m of layerMeshes) if (m) for (const o of [m.lines, m.beads]) { printed.remove(o); o.geometry.dispose(); }
+  layerMeshes.length = 0;
+}
 
 const plugs = [], caps = [], capParts = [], headLeds = [];
 // move an object by a world-space offset (mm), whatever its parent's frame
@@ -442,13 +546,12 @@ function buildRuns() {
   scene.add(bedCable);
   updateRuns();
 }
-// rubber grommets and brass push-fits where cables and PTFE enter the side covers and the head tops
+// black rubber grommets where cables and PTFE enter the side covers and the head tops
 function addGrommets() {
-  const rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.7 }), brass = new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.3, metalness: 0.85 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.7 });
   const ring = (parent, x, y, z, r, t, m, oval = 1) => { const o = new THREE.Mesh(new THREE.TorusGeometry(r / 1000, t / 1000, 10, 28), m); o.rotation.x = -Math.PI / 2; o.scale.x = oval; o.position.copy(v3(x, y, z)); parent.add(o); };
-  const fit = (parent, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.004, 24, 1, true), brass); o.position.copy(v3(x, y + 1.5, z)); parent.add(o); ring(parent, x, y + 3.5, z, 4.5, 0.9, brass); };
   for (const H of Object.values(COVER_HOLES)) {
-    for (const z of H.ptfe) fit(zGroup, H.x, H.top, z);
+    for (const z of H.ptfe) ring(zGroup, H.x, H.top + 0.6, z, 4.2, 1.3, rubber);
     for (const z of H.cable) ring(zGroup, H.cx, H.top + 0.6, z, 4.6, 1.3, rubber, 1.35);
   }
   headGroups.forEach((g, j) => {
@@ -490,9 +593,10 @@ function updateRuns() {
       v3(mid, INLET[0] + 75 + z, 205), v3(ex, ey + 45 + z, ez), v3(ex, ey + z, ez),
       // straight down through the side cover, out of its underside directly below the entry
       v3(ex, ey - 50 + z, ez), v3(ex, COVER_BOTTOM + z, ez), v3(ex, COVER_BOTTOM - 25 + z, ez + 8),
-      v3(ex + s * 15, COVER_BOTTOM - 30 + z, ez + 60), v3(hpx, hpy - 70, hpz - 25), v3(hpx, hpy - 25, hpz), v3(hpx, hpy, hpz), feed,
+      v3(ex + s * 15, COVER_BOTTOM - 30 + z, ez + 60), v3(hpx, hpy - 40, hpz - 70), v3(hpx, hpy, hpz - 25), v3(hpx, hpy, hpz),
     ];
-    tube(r.ptfe, ptfe, 2.0); tube(r.fil, ptfe, 0.9);
+    // the tube ends in the coupler; the filament carries on through it and up to the spool
+    tube(r.ptfe, ptfe, 2.0); tube(r.fil, [...ptfe, v3(hpx, hpy, hpz + COUPLER_LEN), feed], 0.9);
     const cable = [
       v3(hx, PLUG[0] + z, PLUG[1]), v3(hx, PLUG[0] + 35 + z, PLUG[1] + 6),
       v3(mid, INLET[0] + 62 + z, (PLUG[1] + cz) / 2), v3(cx, ey + 40 + z, cz), v3(cx, ey + z, cz), v3(cx, ey - 12 + z, cz),
@@ -569,14 +673,14 @@ loadModel().then((gltf) => {
   headGroups.forEach((g, j) => {
     zGroup.add(g);
     const head = byId[HEAD_IDS[j]];
-    // each tool gets its own materials so the printing one can glow, plus an LED strip like the real cover
-    head.traverse((o) => { if (o.isMesh) o.material = o.material.clone(); });
+    // each tool gets its own materials so the printing one can glow. The clear light pipe in the front cover
+    // (Quadro-x-inject-plastic-16) shows the RGB LED behind it, lit in the colour of the loaded filament.
+    head.traverse((o) => {
+      if (!o.isMesh) return;
+      if (/x-inject-plastic-16(_\d+)?$/.test(o.name)) { o.material = new THREE.MeshBasicMaterial({ color: COLORS[j], toneMapped: false }); headLeds[j] = o; }
+      else o.material = o.material.clone();
+    });
     g.attach(head);
-    const hb = new THREE.Box3().setFromObject(head);
-    const led = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.003, 0.0008), new THREE.MeshBasicMaterial({ color: COLORS[j] }));
-    headLeds[j] = led;
-    led.position.set((hb.min.x + hb.max.x) / 2, hb.max.y - 0.032, hb.min.z - 0.0005);
-    g.add(led);
     head.traverse((o) => { if (!plugs[j] && /kablo/i.test(o.name)) plugs[j] = o; });
     if (plugs[j]) nudge(plugs[j], 0, -PLUG_DROP, 0);
   });
@@ -847,7 +951,7 @@ function log(text, cls = "") {
   consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 const EXTRUDER = ["extruder", "extruder1", "extruder2", "extruder3"];
-const zNow = () => (layer + 1) * LAYER_H;
+const zNow = () => (custom ? custom.layers[layer].z : (layer + 1) * LAYER_H);
 let queue = [], bandAt = 0;
 const phys = (x) => x - PRINT_SX0;                                  // sx -> printer X
 function changePhases(next, [px, py]) {
@@ -888,13 +992,13 @@ function extrudePhase(kind, path, onEnd) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * (Math.ceil(this.plan.L / 0.5) + path.length + 10)), 3));
       geo.setDrawRange(0, 0);
-      this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: COLORS[active] })); this.n = 0;
+      this.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: colourOf(active) })); this.n = 0;
       trails.add(this.line); this.point(...path[0]);
     },
     point(px, py) {
       const pos = this.line.geometry.attributes.position;
       if (this.n >= pos.count) return;
-      pos.setXYZ(this.n++, -(PRINT_SX0 + px) / 1000, (PEI_TOP + (layer + 1) * LAYER_H) / 1000, (PRINT_Z0 + py) / 1000);
+      pos.setXYZ(this.n++, -(PRINT_SX0 + px) / 1000, (PEI_TOP + zNow()) / 1000, (PRINT_Z0 + py) / 1000);
       pos.needsUpdate = true; this.line.geometry.setDrawRange(0, this.n);
     },
     run(t) {
@@ -908,16 +1012,28 @@ function extrudePhase(kind, path, onEnd) {
 }
 function nextJob() {
   if (jobAt >= jobs.length) {
-    if (layer + 1 >= LAYERS) { phase = { kind: "done", t: 0, T: 0, run() {} }; job = "done"; log("// Done printing file", "r"); return; }
-    layer++; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0;
+    if (layer + 1 >= layerCount()) {
+      phase = { kind: "done", t: 0, T: 0, run() {} }; job = "done"; log("// Done printing file", "r");
+      if (K) { K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] }); K.run("TURN_OFF_HEATERS"); }
+      return;
+    }
+    layer++; done.clear(); jobs = jobsOf(layer, active); jobAt = 0; bandAt = 0;
     log(";LAYER_CHANGE  Z" + zNow().toFixed(2), "c");
   }
-  const job = jobs[jobAt++], path = blockPath(job.q, layer);
+  const next = jobs[jobAt++];
   queue = [];
-  if (job.tool !== active) {
-    if (active < 0) queue.push(...changePhases(job.tool, path[0]));
+  if (custom) {                                                   // a sliced model: its runs in order; the tower is part of them
+    const L = layer;
+    if (next.tool !== active) queue.push(...changePhases(next.tool, next.path[0]));
+    queue.push(travelPhase(next.path[0]));
+    queue.push(extrudePhase(next.tower ? "purge" : "print", next.path, () => bakeRun(L, next)));
+    return advance();
+  }
+  const path = blockPath(next.q, layer);
+  if (next.tool !== active) {
+    if (active < 0) queue.push(...changePhases(next.tool, path[0]));
     else {
-      const b = bandAt++, tower = towerPath(layer, b), tool = job.tool, approach = APPROACH[active + ">" + tool] || 0;
+      const b = bandAt++, tower = towerPath(layer, b), tool = next.tool, approach = APPROACH[active + ">" + tool] || 0;
       queue.push(...changePhases(tool, tower[0]));
       if (approach) queue.push(travelPhase(tower[0]));                // the macro stops 10 mm short; the next G1 finishes it
       queue.push({ kind: "note", begin() { log("; prime tower, T" + tool + " purges " + PURGE_VOL + " mm³", "c"); } });
@@ -925,8 +1041,8 @@ function nextJob() {
     }
   }
   queue.push(travelPhase(path[0]));
-  queue.push({ kind: "note", begin() { log("; T" + job.tool + " prints its block", "c"); } });
-  queue.push(extrudePhase("print", path, () => { done.add(job.q); growBlocks(); }));
+  queue.push({ kind: "note", begin() { log("; T" + next.tool + " prints its block", "c"); } });
+  queue.push(extrudePhase("print", path, () => { done.add(next.q); growBlocks(); }));
   advance();
 }
 function startPhase(p) { phase = p; phase.t = 0; phase.T = 0; phase.run ||= () => {}; phase.begin?.(); }
@@ -985,7 +1101,7 @@ function growBlocks() {
     const below = tier * PER_TIER;
     let n = Math.max(0, Math.min(PER_TIER, layer - below + (done.has(q) && Math.floor(layer / PER_TIER) === tier ? 1 : 0)));
     if (layer >= below + PER_TIER) n = PER_TIER;
-    mesh.visible = n > 0 && !bedCleared;
+    mesh.visible = n > 0 && !bedCleared && !custom;
     if (n > 0) { const h = n * LAYER_H; mesh.scale.y = h / 1000; mesh.position.y = (PEI_TOP + tier * TIER + h / 2) / 1000; }
   }
   dirty = true;
@@ -995,25 +1111,31 @@ function growBlocks() {
 let bedCleared = false;
 function clearBed() {
   if (job === "printing" || saved) submit("CANCEL_PRINT");
-  bedCleared = true; trails.visible = tower.visible = false;
+  bedCleared = true; trails.visible = tower.visible = printed.visible = false;
   for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
   meshDots.clear(); growBlocks();
+  if (job === "done" || job === "stopped") { job = "standby"; if (phase.kind === "done") phase = { kind: "ready", t: 0, T: 0, run() {} }; }
   log("; bed cleared", "c");
 }
 function restart(toLayer = 0, quiet = false) {
-  bedCleared = false; trails.visible = tower.visible = true;
+  bedCleared = false; trails.visible = tower.visible = printed.visible = true; clearPrinted();
   for (const l of [...trails.children]) { trails.remove(l); l.geometry.dispose(); }
   phase.end = null; queue = []; cmdQueue = []; saved = null; handover = null; pendingLines = [];
   job = "printing";
   if (K) K.abort();
   if (K) { if (K.isShutdown()) K.run("FIRMWARE_RESTART"); K.setHeaters({ extruder: 220, extruder1: 220, extruder2: 220, extruder3: 220, heater_bed: 60 }); }
   // place the heads as the printer would have them: the active tool over the part, the others parked either side
-  active = fillTower(toLayer); setActive(active);
-  sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + CUBE_X0));
-  if (active >= 0) ny = CUBE_Y0;
-  layer = toLayer; done.clear(); jobs = layerJobs(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle", t: 0, T: 0, run() {} };
+  if (custom) {                                                   // the layers below the one we start at are already printed
+    tower.count = 0; active = -1;
+    for (let L = 0; L < toLayer; L++) for (const r of custom.layers[L].runs) { bakeRun(L, r); active = r.tool; }
+  } else active = fillTower(toLayer);
+  setActive(active);
+  const [startX, startY] = custom ? custom.layers[toLayer].runs[0].path[0] : [CUBE_X0, CUBE_Y0];
+  sx = active < 0 ? [LP[0], LP[1], RP[1], RP[2]] : sx.map((_, j) => (j < active ? LP[j] : j > active ? RP[j - 1] : PRINT_SX0 + startX));
+  if (active >= 0) ny = startY;
+  layer = toLayer; done.clear(); jobs = jobsOf(layer, active); jobAt = 0; bandAt = 0; hop = 0; phase = { kind: "idle", t: 0, T: 0, run() {} };
   for (const l of [...manualTrails.children]) { manualTrails.remove(l); l.geometry.dispose(); }
-  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); if (!quiet) log("SDCARD_PRINT_FILE FILENAME=alignment_test_cube.gcode", "c"); }
+  if (toLayer === 0) { stats = { changes: 0, time: 0, purge: 0 }; meshDots.clear(); if (!quiet) log("SDCARD_PRINT_FILE FILENAME=" + fileName(), "c"); }
   else log("; skipped to layer " + (toLayer + 1), "c");
   lastPos = null; vel = 0;
   growBlocks(); draw(); run();
@@ -1021,7 +1143,7 @@ function restart(toLayer = 0, quiet = false) {
 function draw() {
   headGroups.forEach((g, j) => (g.position.x = -(sx[j] - SX0[j]) / 1000));
   bedGroup.position.z = (NOZZLE_Z - (PRINT_Z0 + ny)) / 1000;
-  zGroup.position.y = ((layer + 1) * LAYER_H + hop - NOZZLE_DROP) / 1000;
+  zGroup.position.y = (zNow() + hop - NOZZLE_DROP) / 1000;
   if (runs.length) { updateRuns(); pressCaps(); updateBedCable(); }
   dirty = true;
 }
@@ -1036,15 +1158,15 @@ let vel = 0, lastPos = null;
 function set(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 function report() {
   const z = zNow() + hop, k = phase.kind;
-  let text = "Layer " + (layer + 1) + "/" + LAYERS + " · ";
+  let text = "Layer " + (layer + 1) + "/" + layerCount() + " · ";
   if (k === "change") text += "Toolchange " + (phase.tc.prev < 0 ? "start" : "T" + phase.tc.prev) + " → T" + phase.tc.next;
   else if (job !== "printing" && job !== "done") text = [job === "paused" ? "Paused" : job === "stopped" ? "Cancelled" : "", stateName()].filter((s, i, all) => s && all.indexOf(s) === i).join(" · ") + (active >= 0 ? " · T" + active : "");
   else if (k === "done") text = "Print complete";
   else if (active >= 0) text += "T" + active + " " + (STATE[k] || "").toLowerCase();
   if (readout.textContent !== text) readout.innerHTML = "<b>" + text + "</b>";
-  const progress = k === "done" ? 1 : (layer + jobAt / 4) / LAYERS;
+  const progress = progressNow();
   set("pct", Math.floor(progress * 100) + "%"); $("bar").style.width = (progress * 100).toFixed(1) + "%";
-  set("d-layer", (layer + 1) + " / " + LAYERS); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
+  set("d-layer", (layer + 1) + " / " + layerCount()); set("d-file", fileName()); set("d-time", clock(stats.time)); set("d-changes", String(stats.changes));
   set("d-state", stateName()); set("d-tool", active < 0 ? "—" : "T" + active);
   set("d-x", active < 0 ? "—" : fmt(phys(sx[active]), 2)); set("d-y", fmt(ny, 2)); set("d-z", fmt(z, 2));
   set("d-v", fmt(vel) + " mm/s"); set("d-purge", fmt(stats.purge) + " mm³");
@@ -1066,7 +1188,7 @@ function sampleVelocity(dt) {
 // ---------- console: the printer's own Klipper config, run by klipper.js ----------
 // Everything typed goes to a model of the printer's Klipper host (printer-config.json is the printer's config:
 // its macros, homing_override and modules). Moves come back as timed items and are animated here.
-let job = "printing", cmdQueue = [], saved = null, simClock = 0, K = null, pendingLines = [], handover = null;
+let job = "standby", cmdQueue = [], saved = null, simClock = 0, K = null, pendingLines = [], handover = null;
 const zAbs = () => zNow() + hop;
 const poseNow = () => ({ x: sx.map(phys), y: ny, z: zAbs() });
 function applyPose(p) { sx = p.x.map((x) => PRINT_SX0 + x); ny = p.y; hop = p.z - zNow(); }
@@ -1122,8 +1244,13 @@ const host = {
   lastPlan: showPlan,
   print: {
     state: () => (job === "printing" || job === "paused" ? "printing" : job === "done" ? "complete" : job === "stopped" ? "cancelled" : "standby"),
-    filename: () => (job === "stopped" && !saved ? "" : "alignment_test_cube.gcode"), duration: () => stats.time, progress: () => Math.min(1, (layer + jobAt / 4) / LAYERS), layers: () => [layer + 1, LAYERS],
-    start: () => { restart(0, true); setPlaying(true); }, cancel: () => stopPrint("stopped"),
+    filename: () => (job === "stopped" && !saved ? "" : fileName()), duration: () => stats.time, progress: progressNow, layers: () => [layer + 1, layerCount()],
+    files: () => [DEMO_FILE, ...sliced.filter((u) => u.toolpath).map((u) => u.name)],
+    start: (f) => {
+      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, layers: u.layers }) : null; }
+      restart(0, true); setPlaying(true); K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
+    },
+    cancel: () => stopPrint("stopped"),
   },
 };
 function stopPrint(kind) {
@@ -1179,7 +1306,6 @@ function resumeHandback() {
 }
 function startKlipper(config) {
   K = createPrinter(config, host);
-  K.setHeaters({ extruder: 220, extruder1: 220, extruder2: 220, extruder3: 220, heater_bed: 60 });
 }
 
 // probed mesh points and the calibration pin
@@ -1234,7 +1360,7 @@ const ASK_URL = "https://quadro-ask.huseyin-926.workers.dev";
 const askLog = $("ask-log"), askForm = $("ask-form"), askInput = $("ask"), askHistory = [];
 function askState() {
   const xs = sx.map((x, j) => "T" + j + " " + (x - PRINT_SX0).toFixed(1)).join(", ");
-  return "Print: " + (job === "printing" ? (playing ? "printing" : "paused") + ", layer " + (layer + 1) + " of " + LAYERS : job) +
+  return "Print: " + (job === "printing" ? (playing ? "printing" : "paused") + " " + fileName() + ", layer " + (layer + 1) + " of " + layerCount() : job) +
     ". Active tool: " + (active < 0 ? "none" : "T" + active) + ". Carriage X (mm): " + xs + ". Bed Y: " + ny.toFixed(1) + ".";
 }
 // plain text with **bold** and `code`; code that names a command becomes a button that fills the console
@@ -1273,6 +1399,70 @@ askForm.addEventListener("submit", async (e) => {
   delete askForm.dataset.busy; askLog.scrollTop = askLog.scrollHeight;
 });
 
+// ---------- the printer's touch screen (QuadroScreen), driving the same console ----------
+const QS_ASSETS = window.QS_ASSETS || {};
+const sliced = [];                                  // models sliced on this page, newest first, shown in the screen's Files
+const screen = createScreen($("qscreen"), {
+  files: () => sliced,
+  run: submit, colors: COLORS, colorNames: ["Blue", "Red", "Green", "Yellow"],
+  asset: (n) => QS_ASSETS[n] || "qs/" + n,
+  clearBed,
+  isShutdown: () => !!K && K.isShutdown(),
+  macroVar: (m, v) => (K ? K.macroVar(m, v) : null),
+  state: () => {
+    const k = K && K.state();
+    return {
+      job, active, layer: layer + 1, layers: layerCount(), changes: stats.changes, elapsed: stats.time, progress: progressNow(),
+      file: fileName(), colours: custom ? custom.colours : null,
+      heaters: K ? K.heaters() : null, homed: k ? [...k.homed] : [], fan: k && active >= 0 ? k.fans["fan_generic fan_t" + active] : 0,
+    };
+  },
+});
+
+// ---------- "Slice your model": the slicing service runs OrcaSlicer for the three printers ----------
+const SLICER_URL = "https://quadro-slicer-312122953843.europe-west1.run.app";
+const sliceForm = $("slice-form"), sliceFile = $("slice-file"), sliceStatus = $("slice-status"), sliceOut = $("slice-out");
+const hm = (s) => { const h = Math.floor(s / 3600), m = Math.round(s / 60) % 60; return h ? h + " h " + m + " min" : m + " min"; };
+function showSlice(r) {
+  const rows = ["a1", "u1", "quadro"].map((k) => r.printers[k]), ok = rows.filter((p) => !p.error);
+  const waste = (p) => p.tower + p.flush, fastest = Math.min(...ok.map((p) => p.time_s)), least = Math.min(...ok.map(waste));
+  sliceOut.innerHTML = '<table><thead><tr><th>Printer</th><th>Print time</th><th>Part</th><th>Prime tower</th><th>Flush (poop)</th><th>Waste</th></tr></thead><tbody>' +
+    rows.map((p) => p.error ? "<tr><td>" + p.printer + '</td><td colspan="5">' + p.error.replace(/[<>&]/g, "") + "</td></tr>" :
+      "<tr><td>" + p.printer + '</td><td class="' + (p.time_s === fastest ? "best" : "") + '">' + hm(p.time_s) + "<small>" + p.toolchanges + " changes" + (p.toolchange_time_s ? ", +" + Math.round(p.toolchange_time_s / 60) + " min toolchange" : "") + "</small></td><td>" +
+      p.part.toFixed(1) + " g</td><td>" + p.tower.toFixed(1) + " g</td><td>" + p.flush.toFixed(1) + ' g</td><td class="' + (waste(p) === least ? "best" : "") + '">' + waste(p).toFixed(1) + " g</td></tr>").join("") +
+    "</tbody></table>";
+}
+sliceForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const file = sliceFile.files[0];
+  if (!file || sliceForm.dataset.busy) return;
+  if (!SLICER_URL) { sliceStatus.className = "slice-status e"; sliceStatus.textContent = "The slicing service is not online yet."; return; }
+  sliceForm.dataset.busy = "1"; sliceStatus.className = "slice-status"; sliceOut.innerHTML = "";
+  // a detailed painted model takes the slicer a few minutes, so show how long it has been working
+  const t0 = Date.now(), tick = () => { const s = Math.round((Date.now() - t0) / 1000);
+    sliceStatus.textContent = "Slicing " + file.name + " for three printers… " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + (s > 20 ? " (detailed or painted models can take a few minutes)" : ""); };
+  tick(); const clock = setInterval(tick, 1000);
+  try {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 900000);
+    const res = await fetch(SLICER_URL + "/slice", { method: "POST", headers: { "X-Filename": file.name.replace(/[^\w.\- ]/g, "_") }, body: file, signal: ctl.signal }).finally(() => { clearTimeout(timer); clearInterval(clock); });
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok || r.error || !r.printers) throw new Error(r.error || (res.status === 504 ? "Slicing took too long for this model." : "The slicing service is unavailable right now."));
+    showSlice(r);
+    const q = r.printers.quadro;
+    if (!q.error) {
+      const name = file.name.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
+      sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
+      sliced.unshift({ name, colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
+      screen.go("files");
+      sliceStatus.textContent = "Done. The Quadro file is on the printer screen below; tap it to print it.";
+    } else sliceStatus.textContent = "Done.";
+  } catch (err) {
+    sliceStatus.className = "slice-status e";
+    sliceStatus.textContent = err.name === "AbortError" ? "Slicing took too long." : err instanceof TypeError ? "The slicing service can't be reached." : err.message;
+  }
+  delete sliceForm.dataset.busy;
+});
+
 fetch(CONFIG_URL).then((r) => r.json()).then((config) => { startKlipper(config); addPin(config.bedPin.T0); }).catch((e) => log("!! Could not load the printer config: " + e.message, "e"));
 
 // ---------- loop ----------
@@ -1297,18 +1487,15 @@ controls.addEventListener("start", run);
 controls.addEventListener("change", run);
 
 // ---------- controls ----------
-const playBtn = document.getElementById("play");
-function setPlaying(on) { playing = on; playBtn.textContent = on ? "Pause" : "Play"; playBtn.setAttribute("aria-pressed", String(on)); run(); }
-playBtn.addEventListener("click", () => setPlaying(!playing));
+function setPlaying(on) { playing = on; run(); }
 document.getElementById("clear-bed").addEventListener("click", clearBed);
-document.getElementById("restart").addEventListener("click", () => { restart(0); setPlaying(true); });
-document.getElementById("skip").addEventListener("click", () => { if (phase.kind !== "done") { restart(Math.min(LAYERS - 1, layer + 10)); setPlaying(true); } });
+document.getElementById("skip").addEventListener("click", () => { if (job === "printing" && phase.kind !== "done") { restart(Math.min(layerCount() - 1, layer + 10)); setPlaying(true); } });
 document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 document.querySelectorAll("[data-speed]").forEach((b) => b.addEventListener("click", () => {
   cfg.scale = Number(b.dataset.speed);
   document.querySelectorAll("[data-speed]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
 }));
-log("SDCARD_PRINT_FILE FILENAME=alignment_test_cube.gcode", "c");
+log("// Printer ready. Start a print from the printer screen below, or send commands here.", "r");
 setPlaying(playing);
 report();
 </script>
