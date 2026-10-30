@@ -239,8 +239,8 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 
     <section class="up" id="upload" aria-labelledby="up-title">
       <div class="up-head">
-        <h2 id="up-title">Upload your model</h2>
-        <p>Drop a model and it is sliced for Quadro and two other multi-colour printers at once: print time, purge waste, and how many prints four 1 kg spools give each of them.</p>
+        <h2 id="up-title">Quadro Printing Time &amp; Waste Simulator</h2>
+        <p>Save your model as a .3mf from Bambu Studio, Snapmaker Orca or OrcaSlicer, with its colours painted or assigned, and drop it here. It is sliced for Quadro and two other multi-colour printers at once, so you see how Quadro prints it, how long it takes on each printer, how much filament each one purges, and how many prints four 1 kg spools give. Then print it on Quadro's own screen below.</p>
       </div>
       <label class="drop" id="drop" data-state="idle">
         <input type="file" id="up-file" accept=".3mf,.stl" hidden>
@@ -1403,7 +1403,7 @@ const host = {
     filename: () => (job === "stopped" && !saved ? "" : fileName()), duration: () => stats.time, progress: progressNow, layers: () => [layer + 1, layerCount()],
     files: () => [DEMO_FILE, ...sliced.filter((u) => u.toolpath).map((u) => u.name)],
     start: (f) => {
-      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, layers: u.layers }) : null; }
+      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, image: u.image, layers: u.layers }) : null; }
       restart(0, true); setPlaying(true); K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
     },
     cancel: () => stopPrint("stopped"),
@@ -1569,7 +1569,7 @@ const screen = createScreen($("qscreen"), {
     const k = K && K.state();
     return {
       job, active, layer: layer + 1, layers: layerCount(), changes: stats.changes, elapsed: stats.time, progress: progressNow(),
-      file: fileName(), colours: custom ? custom.colours : null,
+      file: fileName(), colours: custom ? custom.colours : null, image: custom ? custom.image : null,
       heaters: K ? K.heaters() : null, homed: k ? [...k.homed] : [], fan: k && active >= 0 ? k.fans["fan_generic fan_t" + active] : 0,
     };
   },
@@ -1705,12 +1705,12 @@ $("vs").addEventListener("click", (e) => { const b = e.target.closest("[data-vs]
 for (const id of ["per-day", "per-kg"]) $(id).addEventListener("input", showMonth);
 
 // put a sliced Quadro file on the printer's screen
-function addToScreen(fileName, r) {
+function addToScreen(fileName, r, image) {
   const q = r.printers.quadro;
   if (!q || q.error) return false;
   const name = fileName.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
   sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
-  sliced.unshift({ name, colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
+  sliced.unshift({ name, colours: r.colours, image, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
   screen.go("files");
   return true;
 }
@@ -1730,7 +1730,7 @@ $("samples").addEventListener("click", async (e) => {
     $("work-upload").hidden = true;
     $("work-printers").innerHTML = CMP.map((c) => `<div class="work-row ok"><span>${c.name}</span><div class="track"><i style="width:100%"></i></div><em>sliced</em></div>`).join("");
     showCompare(r, m.name + " (example, sliced in advance)", "up/" + m.id + ".png");
-    const onScreen = addToScreen(m.id + "_example.3mf", r);
+    const onScreen = addToScreen(m.id + "_example.3mf", r, "up/" + m.id + ".png");
     note("Example model, sliced in advance by the same service.", false, true, onScreen);
     scrollToResults();
   } catch { note("Could not load the example.", true); }
@@ -1812,7 +1812,7 @@ function sliceUpload(file) {
     const q = result.printers.quadro;
     if (!thumb && q && q.toolpath) { thumb = renderThumb(q.toolpath, result.colours); if (thumb) $("work-thumb").innerHTML = `<img src="${thumb}" alt="">`; }
     showCompare(result, file.name, thumb);
-    note(addToScreen(file.name, result) ? "Done. The Quadro file is on the printer screen." : "Done.", false, true, !!(q && !q.error));
+    note(addToScreen(file.name, result, thumb) ? "Done. The Quadro file is on the printer screen." : "Done.", false, true, !!(q && !q.error));
     scrollToResults();
   };
   xhr.onload = () => {
