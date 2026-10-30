@@ -55,6 +55,7 @@ const CSS = `
 .qs-file { display: flex; align-items: center; gap: 14px; padding: 10px !important; text-align: left; }
 .qs-thumb { width: 64px; height: 64px; border-radius: 8px; background: #2a2c2f; display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 9px; flex: none; }
 .qs-thumb i { border-radius: 2px; }
+.qs-pic { display: block; padding: 4px; object-fit: contain; }
 .qs-file b { display: block; font-size: 17px; font-weight: 600; } .qs-file span { font-size: 13px; color: #b5b8be; }
 .qs-dialog { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 5; }
 .qs-dialog > div { background: #232426; border: 1px solid #303030; border-radius: 12px; padding: 18px 20px; width: 380px; display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
@@ -159,7 +160,8 @@ export function createScreen(frame, api) {
 
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => "&#" + c.charCodeAt(0) + ";");
   const hex = (c) => (/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(c) ? c.slice(0, 7) : "#888");
-  const thumb = (cols = [3, 2, 0, 1].map((j) => api.colors[j])) => `<div class="qs-thumb">${[0, 1, 2, 3].map((i) => `<i style="background:${hex(cols[i % cols.length])}"></i>`).join("")}</div>`;
+  // a sliced model's picture when the page has one, otherwise its colours in a 2 x 2 grid
+  const thumb = (cols = [3, 2, 0, 1].map((j) => api.colors[j]), img) => img ? `<img class="qs-thumb qs-pic" src="${esc(img)}" alt="">` : `<div class="qs-thumb">${[0, 1, 2, 3].map((i) => `<i style="background:${hex(cols[i % cols.length])}"></i>`).join("")}</div>`;
   // models sliced for Quadro on the page ("Slice your model"), listed under the demo file
   const uploads = () => (api.files ? api.files() : []);
   const g = (x) => (x >= 10 ? Math.round(x) : x.toFixed(1)) + " g";
@@ -179,11 +181,11 @@ export function createScreen(frame, api) {
     files() {
       const ups = uploads(), u = typeof sub === "number" ? ups[sub] : null;
       return `<h2>Files</h2><div class="qs-list">
-        ${ups.map((f, i) => `<button class="qs-file" data-up="${i}">${thumb(f.colours)}<div><b>${esc(f.name)}</b><span>${fmtTime(f.time_s)} · ${g(f.part)} · tower ${g(f.tower)} · ${f.colours.length} colour${f.colours.length > 1 ? "s" : ""} · ${f.toolchanges} toolchanges</span></div></button>`).join("")}
+        ${ups.map((f, i) => `<button class="qs-file" data-up="${i}">${thumb(f.colours, f.image)}<div><b>${esc(f.name)}</b><span>${fmtTime(f.time_s)} · ${g(f.part)} · tower ${g(f.tower)} · ${f.colours.length} colour${f.colours.length > 1 ? "s" : ""} · ${f.toolchanges} toolchanges</span></div></button>`).join("")}
         <button class="qs-file" data-a="pick">${thumb()}<div><b>${FILE}</b><span>Alignment test cube · 20 mm · 4 colours · 100 layers</span></div></button>
       </div>${sub === "confirm" ? `<div class="qs-dialog"><div>${thumb()}<b>${FILE}</b><span class="muted">Start printing this file?</span>
         <div class="btns"><button data-a="close">Cancel</button><button class="primary" data-a="print">Print</button></div></div></div>` : ""}
-      ${u ? `<div class="qs-dialog"><div>${thumb(u.colours)}<b>${esc(u.name)}</b>
+      ${u ? `<div class="qs-dialog"><div>${thumb(u.colours, u.image)}<b>${esc(u.name)}</b>
         <span class="muted" style="line-height:1.6">Sliced for Quadro with OrcaSlicer<br>Print time ${fmtTime(u.time_s)} · ${u.toolchanges} toolchanges<br>Part ${g(u.part)} · prime tower ${g(u.tower)}</span>
         <span class="muted" style="font-size:12px">The printer plays this file's toolpath layer by layer; 10× playback and Skip speed it up.</span>
         <div class="btns"><button data-a="close">Close</button>${u.toolpath ? `<button class="primary" data-a="print-up">Print</button>` : ""}</div>
@@ -193,7 +195,7 @@ export function createScreen(frame, api) {
       const s = st(), pct = Math.floor(s.progress * 100), C = 2 * Math.PI * 54;
       const left = s.progress > 0.01 ? s.elapsed / s.progress - s.elapsed : 0;
       return `<div class="qs-job" style="display:flex;flex-direction:column;flex:1">
-        <div class="row">${thumb(s.colours || undefined)}<div><b style="font-size:17px">${esc(s.file || FILE)}</b><div class="muted" style="font-size:13px">${s.job === "paused" ? "Paused" : "Printing"}${s.active >= 0 ? " · Tool " + (s.active + 1) : ""}</div></div></div>
+        <div class="row">${thumb(s.colours || undefined, s.image)}<div><b style="font-size:17px">${esc(s.file || FILE)}</b><div class="muted" style="font-size:13px">${s.job === "paused" ? "Paused" : "Printing"}${s.active >= 0 ? " · Tool " + (s.active + 1) : ""}</div></div></div>
         <div class="top"><div class="qs-ring"><svg viewBox="0 0 128 128"><circle cx="64" cy="64" r="54" fill="none" stroke="#3a3c40" stroke-width="10"/>
           <circle cx="64" cy="64" r="54" fill="none" stroke="#6e9753" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - s.progress)}"/></svg><b>${pct}%</b></div>
           <div class="qs-stats"><div><span>Layer</span><b>${s.layer} / ${s.layers}</b></div><div><span>Toolchanges</span><b>${s.changes}</b></div>

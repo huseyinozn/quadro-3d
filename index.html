@@ -93,23 +93,161 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .ask-log .a { color: var(--d-ink); } .ask-log .a.e { color: #ff7b72; } .ask-log .a.wait { color: var(--d-muted); }
 .ask-log code { font: 12px var(--mono); background: var(--d-bg); border: 1px solid var(--d-line); border-radius: 4px; padding: 0 4px; }
 .ask-log button.code { min-height: 0; padding: 0 5px; font: 12px var(--mono); color: var(--d-accent); background: var(--d-bg); border: 1px dashed var(--d-line); border-radius: 4px; }
-.slice-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.slice-form input[type=file] { flex: 1; min-width: 0; color: var(--d-muted); font: 13px var(--sans); }
-.slice-form input[type=file]::file-selector-button { font: 500 13px var(--sans); color: var(--d-ink); background: var(--d-head); border: 1px solid var(--d-line); border-radius: 6px; padding: 8px 12px; margin-right: 10px; cursor: pointer; }
-.slice-form button { background: var(--d-accent); color: #fff; border-color: var(--d-accent); font-weight: 600; }
-.slice-note { margin: 8px 0 0; font-size: 12px; color: var(--d-muted); }
-.slice-status { margin: 10px 0 0; font-size: 14px; } .slice-status.e { color: #ff7b72; }
-#slice-out table { margin-top: 10px; } #slice-out td.best { color: #8fd18f; }
-#slice-out td small { display: block; font-size: 11px; color: var(--d-muted); font-family: var(--sans); font-weight: 400; }
+/* "Upload your model" and the printer screen: light in every theme, like the Kickstarter page */
+.up, .screen-wrap { --u-bg: #ffffff; --u-soft: #f5f6f8; --u-ink: #15171a; --u-muted: #6b7078; --u-line: #e3e5e9; --u-track: #eceef1;
+  --u-accent: #2f7cf6; --u-accent2: #1f56c9; --u-waste: #a9afb8; --u-good: #1f9d55; --u-bad: #d64545;
+  color-scheme: light; color: var(--u-ink); background: var(--u-soft); border: 1px solid var(--u-line); border-radius: 16px; padding: 20px; display: grid; gap: 16px; font-family: Poppins, var(--sans); }
+.up h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.up-head h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: .01em; }
+.up-head p, .res-head p { margin: 4px 0 0; color: var(--u-muted); font-size: 14px; max-width: 70ch; }
+.drop { display: block; position: relative; border: 2px dashed #c9cdd4; border-radius: 16px; background: var(--u-bg); min-height: 170px; cursor: pointer; transition: border-color .2s, background .2s; }
+.drop:hover, .drop.over { border-color: var(--u-accent); background: #f3f7fe; }
+.drop:focus-within { outline: 2px solid var(--u-accent); outline-offset: 2px; }
+.drop-idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 18px; padding: 16px; text-align: left; }
+.drop-icon { width: 64px; height: 64px; flex: none; border-radius: 16px; display: grid; place-items: center; color: var(--u-accent); background: #eaf1fd; transition: transform .25s; }
+.drop:hover .drop-icon, .drop.over .drop-icon { transform: translateY(-4px); }
+.drop-idle b { display: block; font-size: 22px; font-weight: 600; }
+.drop-idle small { display: block; color: var(--u-muted); font-size: 14px; }
+.drop-work { display: none; padding: 18px 20px; gap: 12px; cursor: default; }
+.drop:not([data-state="idle"]) .drop-idle { display: none; }
+.drop:not([data-state="idle"]) .drop-work { display: grid; }
+.drop[data-state="work"] { cursor: progress; }
+.work-top { display: grid; grid-template-columns: 112px 1fr; gap: 18px; align-items: center; }
+.thumb { width: 112px; aspect-ratio: 1; border-radius: 12px; background: var(--u-soft); border: 1px solid var(--u-line); display: grid; place-items: center; overflow: hidden; }
+.thumb img, .thumb canvas { width: 100%; height: 100%; object-fit: contain; }
+.thumb:empty::after { content: ""; width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--u-track); border-top-color: var(--u-accent); animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.work-main { display: grid; gap: 9px; min-width: 0; }
+.work-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.work-head b { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.work-head span { color: var(--u-muted); font: 13px var(--mono); }
+.work-row { display: grid; grid-template-columns: minmax(110px, 180px) 1fr 74px; gap: 12px; align-items: center; font-size: 14px; }
+.work-row[hidden] { display: none; }
+.work-row em { font: normal 13px var(--mono); color: var(--u-muted); text-align: right; }
+.work-row.ok em { color: var(--u-good); } .work-row.bad em { color: var(--u-bad); }
+.track { height: 10px; border-radius: 5px; background: var(--u-track); overflow: hidden; }
+.track i { display: block; height: 100%; width: 0; border-radius: 5px; background: var(--u-accent); transition: width .4s ease-out; }
+.work-row.ok .track i { background: var(--u-good); } .work-row.bad .track i { background: var(--u-bad); }
+.work-row.run .track i { background-image: linear-gradient(90deg, rgba(255,255,255,0) 0, rgba(255,255,255,.45) 50%, rgba(255,255,255,0) 100%); background-size: 120px 100%; background-repeat: no-repeat; animation: sheen 1.4s linear infinite; }
+@keyframes sheen { from { background-position: -120px 0; } to { background-position: calc(100% + 120px) 0; } }
+.work-note { margin: 0; font-size: 14px; color: var(--u-muted); }
+.work-note.e { color: var(--u-bad); }
+.work-note button { margin-left: 8px; min-height: 34px; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--u-accent); background: var(--u-accent); color: #fff; font: 500 14px Poppins, var(--sans); }
+.work-note button.ghost { background: var(--u-bg); color: var(--u-accent); }
+.samples { display: grid; gap: 10px; }
+.samples h3 { font-weight: 500; color: var(--u-muted); font-size: 14px; }
+.sample-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sample { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; text-align: left; background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 14px; padding: 10px; min-height: 0; font-family: inherit; color: var(--u-ink); transition: border-color .2s, transform .2s, box-shadow .2s; }
+.sample:hover { border-color: var(--u-accent); transform: translateY(-2px); box-shadow: 0 10px 22px -16px rgba(20,40,80,.5); }
+.sample[aria-pressed="true"] { border: 2px solid var(--u-accent); padding: 9px; }
+.sample img { width: 76px; height: 76px; border-radius: 10px; background: var(--u-soft); object-fit: contain; }
+.sample b { display: block; font-size: 15px; font-weight: 600; }
+.sample small { display: block; color: var(--u-muted); font-size: 12.5px; line-height: 1.35; }
+.results-wrap[hidden] { display: none; }
+.sim-head { display: grid; gap: 6px; }
+.sim-head .eyebrow { font-size: 13px; color: var(--muted); letter-spacing: .02em; }
+.sim-head h1 { font-family: Poppins, var(--sans); font-size: clamp(24px, 4vw, 34px); line-height: 1.15; }
+.sim-head p { margin: 0; color: var(--muted); font-size: 15px; max-width: 78ch; }
+.res-head { text-align: center; } .res-head h3 { font-size: 22px; } .res-head p { margin-inline: auto; }
+.spools { display: block; width: min(100%, 640px); height: auto; margin: 0 auto -44px; position: relative; z-index: 0; }
+.cmp { display: grid; gap: 12px; position: relative; z-index: 1; }
+.pc { background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 18px; padding: 16px 20px 18px; display: grid; grid-template-columns: 60px 1fr auto;
+  grid-template-areas: "icon name count" "icon chips count" "bar bar bar"; gap: 4px 16px; align-items: center; box-shadow: 0 8px 24px -18px rgba(20,30,50,.35); }
+.pc.best { border: 2px solid var(--u-accent); padding: 15px 19px 17px; }
+.pc > .pthumb { grid-area: icon; width: 60px; height: 60px; border-radius: 12px; background: var(--u-soft); object-fit: contain; }
+.pc-name { grid-area: name; font-size: 20px; font-weight: 600; } .chips { grid-area: chips; } .pc-count { grid-area: count; } .pc-bar { grid-area: bar; } .pc-err { grid-area: chips; color: var(--u-bad); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; color: var(--u-muted); }
+.chip { background: var(--u-soft); border: 1px solid var(--u-line); border-radius: 8px; padding: 2px 10px; font-size: 14px; font-weight: 500; color: var(--u-ink); white-space: nowrap; }
+.pc.best .chip.w { color: var(--u-accent); border: 1.5px dashed var(--u-accent); background: #f3f7fe; }
+.pc-count { text-align: right; }
+.pc-count b { display: block; font-size: 52px; line-height: 1; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: #9aa0a8; }
+.pc.best .pc-count b { color: var(--u-accent); }
+.pc-count span { color: var(--u-muted); font-size: 13px; }
+.pc-bar { height: 22px; margin-top: 10px; border-radius: 8px; background: var(--u-track); overflow: hidden; }
+.pc-bar svg { display: block; width: 100%; height: 100%; clip-path: inset(0 100% 0 0); transition: clip-path 1.4s cubic-bezier(.3,.6,.2,1); }
+.pc-bar.in svg { clip-path: inset(0 0 0 0); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--u-muted); font-size: 13px; }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .m { background: var(--u-accent); } .legend .w { background: var(--u-waste); }
+.stats { background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 18px; padding: 16px 20px; display: grid; gap: 10px; }
+.stats h3 { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; color: var(--u-muted); }
+.stats hr { border: 0; border-top: 1px solid var(--u-line); margin: 6px 0; }
+.srow { display: grid; grid-template-columns: minmax(96px, 210px) 1fr minmax(84px, auto); gap: 14px; align-items: center; font-size: 16px; }
+.srow b { font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; font-size: 18px; }
+.srow.q b { color: var(--u-accent); } .srow.q > span { font-weight: 600; } .srow span small { display: block; font-size: 12px; color: var(--u-muted); font-weight: 400; }
+.srow .track i { transition: width 1.1s cubic-bezier(.2,.7,.2,1); }
+.srow:not(.q) .track i { background: var(--u-waste); }
+.month { display: grid; gap: 12px; }
+.month-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.month-set { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 14px; color: var(--u-muted); }
+.month-set input { width: 56px; min-height: 34px; padding: 4px 8px; border: 1px solid var(--u-line); border-radius: 8px; font: 500 15px Poppins, var(--sans); color: var(--u-ink); background: var(--u-bg); margin: 0 4px; }
+.seg { display: inline-flex; border: 1px solid var(--u-line); border-radius: 10px; overflow: hidden; background: var(--u-bg); }
+.seg button { border: 0; border-radius: 0; min-height: 34px; padding: 4px 12px; font: 500 13px Poppins, var(--sans); background: transparent; color: var(--u-muted); }
+.seg button + button { border-left: 1px solid var(--u-line); }
+.seg button[aria-pressed="true"] { background: var(--u-ink); color: #fff; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tile { border-radius: 18px; padding: 18px 20px; min-height: 120px; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; background: var(--u-accent); color: #fff; }
+.tile:nth-child(2) { background: var(--u-accent2); }
+.tile:nth-child(3) { background: var(--u-bg); color: var(--u-ink); border: 1px solid var(--u-line); }
+.tile b { font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.tile span { font-size: 15px; line-height: 1.3; opacity: .92; }
+.tile.neg { background: var(--u-bg) !important; color: var(--u-ink); border: 1px solid var(--u-line); }
+.foot { margin: 0; color: var(--u-muted); font-size: 13px; text-align: right; }
+.month-note { margin: 0; font-size: 13px; color: #a15c00; } .month-note:empty { display: none; }
+/* the printer's 5" screen in its housing; the screen itself stays the printer's own dark UI */
+.screen-wrap { background: radial-gradient(130% 90% at 50% 105%, #cfe5fa 0%, #e9f1f9 45%, #f6f7f9 100%); }
+.device { width: min(100%, 880px); margin: 8px auto 4px; padding: 1.3%; border-radius: 5.5% / 8.8%; background: linear-gradient(150deg, #fbfbfc 0%, #c9cdd3 35%, #eef0f2 55%, #a9aeb5 100%); box-shadow: 0 34px 60px -28px rgba(25, 45, 80, .55), inset 0 1px 0 #fff; }
+.bezel { background: #0a0a0b; border-radius: 4.8% / 7.8%; padding: 5.2% 5.6% 6.2%; }
+.bezel .qs-frame { border-radius: 8px; }
+@media (max-width: 720px) {
+  .up, .screen-wrap { padding: 14px; border-radius: 14px; }
+  .pc { grid-template-columns: 44px 1fr auto; grid-template-areas: "icon name count" "chips chips count" "bar bar bar"; gap: 6px 10px; padding: 12px 14px 14px; }
+  .pc.best { padding: 11px 13px 13px; } .pc > .pthumb { width: 44px; height: 44px; }
+  .pc-count b { font-size: 38px; } .pc-count span { font-size: 12px; } .pc-name { font-size: 16px; } .chip { font-size: 13px; padding: 2px 8px; }
+  .drop-idle { flex-direction: column; text-align: center; gap: 10px; } .drop-idle b { font-size: 18px; }
+  .work-top { grid-template-columns: 72px 1fr; gap: 12px; } .thumb { width: 72px; }
+  .srow, .work-row { grid-template-columns: 1fr auto; grid-template-areas: "label val" "track track"; gap: 4px 10px; font-size: 14px; }
+  .srow > span, .work-row > span { grid-area: label; } .srow > b, .work-row > em { grid-area: val; } .srow > .track, .work-row > .track { grid-area: track; }
+  .srow span small { display: inline; margin-left: 6px; }
+  .drop-work { padding: 14px; } .work-note button { margin: 8px 8px 0 0; }
+  .sample-list { grid-template-columns: 1fr; } .res-head h3 { font-size: 19px; } .spools { margin-bottom: -26px; }
+  .tiles { grid-template-columns: 1fr; } .tile { min-height: 0; } .tile b { font-size: 36px; }
+  .device { padding: 2%; } .bezel { padding: 4.5% 4.5% 5%; } }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
 @media (max-width: 720px) { .dash { grid-template-columns: 1fr; } .stage { aspect-ratio: 1 / 1; } }
 </style>
 
 <div class="page">
-  <header>
-    <h1>Co Print Quadro</h1>
-    <p>Four independent toolheads on one X beam, parking in Qdock stations at both ends</p>
+  <header class="sim-head">
+    <span class="eyebrow">Co Print Quadro · four independent toolheads on one X beam</span>
+    <h1 id="up-title">Quadro Printing Time &amp; Waste Simulator</h1>
+    <p>Save your model as a .3mf from Bambu Studio, Snapmaker Orca or OrcaSlicer, with its colours painted or assigned, and drop it here. It is sliced for Quadro and two other multi-colour printers at once, so you see how Quadro prints it, how long it takes on each printer, how much filament each one purges, and how many prints four 1 kg spools give. Then print it on Quadro's own screen below.</p>
   </header>
+
+    <section class="up" id="upload" aria-label="Upload a model">
+      <label class="drop" id="drop" data-state="idle">
+        <input type="file" id="up-file" accept=".3mf,.stl" hidden>
+        <div class="drop-idle">
+          <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg></span>
+          <span><b>Drag your model here</b><small>.3mf with its colours (up to 4) · .stl · or tap to choose a file</small></span>
+        </div>
+        <div class="drop-work" aria-live="polite">
+          <div class="work-top">
+            <div class="thumb" id="work-thumb"></div>
+            <div class="work-main">
+              <div class="work-head"><b id="work-file"></b><span id="work-clock"></span></div>
+              <div class="work-row" id="work-upload"><span>Uploading</span><div class="track"><i></i></div><em></em></div>
+              <div id="work-printers"></div>
+            </div>
+          </div>
+          <p class="work-note" id="work-note"></p>
+        </div>
+      </label>
+      <div class="samples">
+        <h3>No model at hand? Try one of these</h3>
+        <div class="sample-list" id="samples"></div>
+      </div>
+    </section>
 
   <div class="stage" id="stage">
     <div class="loading" id="loading">Loading model…</div>
@@ -125,8 +263,41 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
     </div>
     <div class="row">
       <span class="label">View</span>
-      <button data-view="front">Front</button><button data-view="iso">Isometric</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="dock">Qdock</button><button data-view="part">Part</button><button data-view="room">Desk</button><button id="room-toggle">Hide room</button>
+      <button data-view="front">Front</button><button data-view="iso">Isometric</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="dock">Qdock</button><button data-view="part">Part</button><button data-view="room">Desk</button><button id="room-toggle">Show room</button>
     </div>
+
+
+    <section class="up results-wrap" id="results" hidden aria-label="Results">
+        <div class="res-head">
+          <h3>How many of this print do 4 kg of filament make?</h3>
+          <p>Four 1 kg spools, one per colour. Each bar is the whole 4 kg: blue is printed model, grey is purge waste, one block per print.</p>
+        </div>
+        <img class="spools" src="up/spools.webp" alt="" width="940" height="368">
+        <div class="cmp" id="cmp"></div>
+        <div class="legend"><span><i class="m"></i>Printed model</span><span><i class="w"></i>Purge waste</span><span id="cmp-model"></span></div>
+        <div class="stats" id="stats"></div>
+        <div class="month">
+          <div class="month-head">
+            <h3>What it means in a month</h3>
+            <div class="month-set">
+              <span class="seg" id="vs" role="group" aria-label="Compared with"></span>
+              <label><input id="per-day" type="number" min="1" max="24" step="1" value="2"> prints a day</label>
+              <label>$<input id="per-kg" type="number" min="5" max="200" step="1" value="25"> per kg</label>
+            </div>
+          </div>
+          <div class="tiles" id="tiles"></div>
+          <p class="month-note" id="month-note"></p>
+        </div>
+        <p class="foot" id="up-foot"></p>
+    </section>
+
+    <section class="screen-wrap" aria-labelledby="screen-title">
+      <div class="up-head">
+        <h2 id="screen-title">Printer screen</h2>
+        <p>Quadro's own touch screen software. Tap it to print, move and calibrate; it drives the printer above. Calibrations take real time, and 10× playback speeds them up.</p>
+      </div>
+      <div class="device"><div class="bezel"><div id="qscreen"></div></div></div>
+    </section>
 
     <div class="dash">
       <section class="card">
@@ -194,19 +365,6 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         </div>
         <pre class="console" id="console" aria-live="off"></pre>
         <form class="cmdline" id="cmd-form" autocomplete="off"><input id="cmd" type="text" spellcheck="false" autocapitalize="characters" placeholder="Send code…" aria-label="G-code command"><button type="submit">Send</button></form>
-      </section>
-      <section class="card wide">
-        <h2>Slice your model <small>OrcaSlicer 2.4.2 · Bambu Lab A1 combo · Snapmaker U1 · Co Print Quadro</small></h2>
-        <div class="body">
-          <form class="slice-form" id="slice-form"><input type="file" id="slice-file" accept=".3mf,.stl" aria-label="Model file (3MF or STL)"><button type="submit">Slice for all three</button></form>
-          <p class="slice-note">Upload a 3MF with its colours assigned (up to 4), or an STL for one colour. Each printer uses its standard 0.20 mm profile with PLA. The Quadro file then appears on the printer screen below.</p>
-          <p class="slice-status" id="slice-status" aria-live="polite"></p>
-          <div id="slice-out"></div>
-        </div>
-      </section>
-      <section class="card wide">
-        <h2>Printer screen <small>QuadroScreen · tap it to print, move and calibrate · calibrations take real time, 10× playback speeds them up</small></h2>
-        <div class="body"><div id="qscreen"></div></div>
       </section>
       <section class="card wide">
         <h2>Ask about Quadro <small>answered by Claude · tap a command to put it in the console</small></h2>
@@ -698,9 +856,10 @@ loadModel().then((gltf) => {
   }
   buildRuns();
   addRoom();
+  roomGroup.visible = false;                                      // the printer alone at first; "Show room" or Desk brings the room
   ready = true;
   document.getElementById("loading").remove();
-  setView("room", true);
+  setView("iso", true);
   setActive(-1);
   draw();
   run();
@@ -846,13 +1005,15 @@ function chair(x, floor, z) {
     box(0.06, 0.025, 0.25, blk, x + s * 0.225, floor + 0.672, z - 0.02);
   }
 }
-document.getElementById("room-toggle").addEventListener("click", (e) => {
-  roomGroup.visible = !roomGroup.visible; e.target.textContent = roomGroup.visible ? "Hide room" : "Show room"; dirty = true; run();
+function showRoom(on) { roomGroup.visible = on; $("room-toggle").textContent = on ? "Hide room" : "Show room"; dirty = true; run(); }
+document.getElementById("room-toggle").addEventListener("click", () => {
+  showRoom(!roomGroup.visible);
 });
 
 const VIEWS = { front: [180, 8, 0.95], iso: [215, 22, 1.05], side: [270, 12, 1.05], top: [180, 80, 1.0], dock: [160, 14, 0.5], part: [205, 28, 0.28], room: [205, 16, 2.5] };
 let tween = null;
 function setView(name, instant) {
+  if (name === "room" && !roomGroup.visible && roomGroup.children.length) showRoom(true);
   const [az, el, k] = VIEWS[name];
   const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el), d = name === "dock" || name === "part" || name === "room" ? k : radius * 2.4 * k;
   const target = name === "dock" ? new THREE.Vector3(0.3, 0.05, 0.18)
@@ -1247,7 +1408,7 @@ const host = {
     filename: () => (job === "stopped" && !saved ? "" : fileName()), duration: () => stats.time, progress: progressNow, layers: () => [layer + 1, layerCount()],
     files: () => [DEMO_FILE, ...sliced.filter((u) => u.toolpath).map((u) => u.name)],
     start: (f) => {
-      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, layers: u.layers }) : null; }
+      if (f) { const u = sliced.find((v) => v.name === f && v.toolpath); custom = u ? (u.layers ||= decodeToolpath(u.toolpath), { name: u.name, colours: u.colours, image: u.image, layers: u.layers }) : null; }
       restart(0, true); setPlaying(true); K.sync({ ...poseNow(), active, homed: ["x", "y", "z"] });
     },
     cancel: () => stopPrint("stopped"),
@@ -1413,55 +1574,278 @@ const screen = createScreen($("qscreen"), {
     const k = K && K.state();
     return {
       job, active, layer: layer + 1, layers: layerCount(), changes: stats.changes, elapsed: stats.time, progress: progressNow(),
-      file: fileName(), colours: custom ? custom.colours : null,
+      file: fileName(), colours: custom ? custom.colours : null, image: custom ? custom.image : null,
       heaters: K ? K.heaters() : null, homed: k ? [...k.homed] : [], fan: k && active >= 0 ? k.fans["fan_generic fan_t" + active] : 0,
     };
   },
 });
 
-// ---------- "Slice your model": the slicing service runs OrcaSlicer for the three printers ----------
+// ---------- "Upload your model": the slicing service runs OrcaSlicer for three printers and the page compares them ----------
 const SLICER_URL = "https://quadro-slicer-312122953843.europe-west1.run.app";
-const sliceForm = $("slice-form"), sliceFile = $("slice-file"), sliceStatus = $("slice-status"), sliceOut = $("slice-out");
-const hm = (s) => { const h = Math.floor(s / 3600), m = Math.round(s / 60) % 60; return h ? h + " h " + m + " min" : m + " min"; };
-function showSlice(r) {
-  const rows = ["a1", "u1", "quadro"].map((k) => r.printers[k]), ok = rows.filter((p) => !p.error);
-  const waste = (p) => p.tower + p.flush, fastest = Math.min(...ok.map((p) => p.time_s)), least = Math.min(...ok.map(waste));
-  sliceOut.innerHTML = '<table><thead><tr><th>Printer</th><th>Print time</th><th>Part</th><th>Prime tower</th><th>Flush (poop)</th><th>Waste</th></tr></thead><tbody>' +
-    rows.map((p) => p.error ? "<tr><td>" + p.printer + '</td><td colspan="5">' + p.error.replace(/[<>&]/g, "") + "</td></tr>" :
-      "<tr><td>" + p.printer + '</td><td class="' + (p.time_s === fastest ? "best" : "") + '">' + hm(p.time_s) + "<small>" + p.toolchanges + " changes" + (p.toolchange_time_s ? ", +" + Math.round(p.toolchange_time_s / 60) + " min toolchange" : "") + "</small></td><td>" +
-      p.part.toFixed(1) + " g</td><td>" + p.tower.toFixed(1) + " g</td><td>" + p.flush.toFixed(1) + ' g</td><td class="' + (waste(p) === least ? "best" : "") + '">' + waste(p).toFixed(1) + " g</td></tr>").join("") +
-    "</tbody></table>";
+const SPOOLS_G = 4000;                                // four 1 kg spools
+const CMP = [                                         // the order the cards show, Quadro first
+  { key: "quadro", name: "Co Print Quadro", short: "Quadro" },
+  { key: "u1", name: "Snapmaker U1", short: "Snapmaker U1" },
+  { key: "a1", name: "Bambu Lab A1 combo", short: "Bambu A1 combo" },
+];
+// three models sliced in advance by the same service (up/*.json), for visitors without a file of their own
+const SAMPLES = [
+  { id: "cubes", name: "Colour test cubes", note: "4 cubes, every layer in 4 colours · 450 colour changes" },
+  { id: "coaster", name: "Checker coaster", note: "16 tiles in 4 colours · 60 colour changes" },
+  { id: "vase", name: "Striped vase", note: "4 colour bands stacked · 3 colour changes" },
+];
+const drop = $("drop"), upFile = $("up-file");
+const hm = (s) => { s = Math.round(s / 60); return Math.floor(s / 60) + "h " + String(s % 60).padStart(2, "0") + "m"; };
+const grams = (g) => (g >= 100 ? Math.round(g) : g >= 10 ? g.toFixed(0) : g.toFixed(1)) + " g";
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// A small picture of a sliced model drawn from its toolpath: the walls and top surfaces, layer by layer from below,
+// in an isometric view, in the model's own colours. Used when the file brings no picture of its own.
+function renderThumb(tp, colours, size = 256) {
+  const layers = tp.layers.map(([z, runs]) => [z, runs.filter((r) => r[1] !== 1)]);
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, zTop = 0;
+  const pts = (r, f) => { let x = 0, y = 0; for (let i = 2; i < r.length; i += 2) { x = i === 2 ? r[i] : x + r[i]; y = i === 2 ? r[i + 1] : y + r[i + 1]; f(x / 10, y / 10); } };
+  for (const [z, runs] of layers) for (const r of runs) { zTop = Math.max(zTop, z); pts(r, (x, y) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }); }
+  if (x0 > x1) return null;
+  const c30 = Math.cos(Math.PI / 6), s30 = 0.5, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const proj = (x, y, z) => [(x - cx - (y - cy)) * c30, -((x - cx + (y - cy)) * s30) - z];
+  let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+  for (const [x, y] of [[x0, y0], [x0, y1], [x1, y0], [x1, y1]]) for (const z of [0, zTop]) { const [u, v] = proj(x, y, z); u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+  const k = (size * 0.86) / Math.max(u1 - u0, v1 - v0), ox = size / 2 - ((u0 + u1) / 2) * k, oy = size / 2 - ((v0 + v1) / 2) * k;
+  const cv = document.createElement("canvas"); cv.width = cv.height = size;
+  const g = cv.getContext("2d"); g.lineCap = "round"; g.lineJoin = "round";
+  const rgb = colours.map((c) => new THREE.Color(c));
+  const lw = Math.max(1, 0.5 * k);
+  const step = Math.max(1, Math.round(layers.length / 260));        // a tall model needs only every few layers
+  layers.forEach(([z, runs], L) => {
+    const last = L === layers.length - 1;
+    if (L % step && !last) return;
+    for (const r of runs) {
+      if (r[1] === 0 && !last && L % (step * 4)) continue;           // inside the part: draw now and then, the walls always
+      const col = rgb[r[0]] || rgb[0];
+      let px = null, py = null;
+      pts(r, (x, y) => {
+        if (px !== null) {
+          const dx = x - px, dy = y - py, d = Math.hypot(dx, dy) || 1, shade = 0.72 + 0.28 * Math.abs((dx - dy) / d / Math.SQRT2);
+          g.strokeStyle = `rgb(${Math.round(col.r * 255 * shade)},${Math.round(col.g * 255 * shade)},${Math.round(col.b * 255 * shade)})`;
+          g.lineWidth = lw; g.beginPath();
+          const [a, b] = proj(px, py, z), [c, d2] = proj(x, y, z);
+          g.moveTo(ox + a * k, oy + b * k); g.lineTo(ox + c * k, oy + d2 * k); g.stroke();
+        }
+        px = x; py = y;
+      });
+    }
+  });
+  return cv.toDataURL("image/png");
 }
-sliceForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const file = sliceFile.files[0];
-  if (!file || sliceForm.dataset.busy) return;
-  if (!SLICER_URL) { sliceStatus.className = "slice-status e"; sliceStatus.textContent = "The slicing service is not online yet."; return; }
-  sliceForm.dataset.busy = "1"; sliceStatus.className = "slice-status"; sliceOut.innerHTML = "";
-  // a detailed painted model takes the slicer a few minutes, so show how long it has been working
-  const t0 = Date.now(), tick = () => { const s = Math.round((Date.now() - t0) / 1000);
-    sliceStatus.textContent = "Slicing " + file.name + " for three printers… " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + (s > 20 ? " (detailed or painted models can take a few minutes)" : ""); };
-  tick(); const clock = setInterval(tick, 1000);
-  try {
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 900000);
-    const res = await fetch(SLICER_URL + "/slice", { method: "POST", headers: { "X-Filename": file.name.replace(/[^\w.\- ]/g, "_") }, body: file, signal: ctl.signal }).finally(() => { clearTimeout(timer); clearInterval(clock); });
-    const r = await res.json().catch(() => ({}));
-    if (!res.ok || r.error || !r.printers) throw new Error(r.error || (res.status === 504 ? "Slicing took too long for this model." : "The slicing service is unavailable right now."));
-    showSlice(r);
-    const q = r.printers.quadro;
-    if (!q.error) {
-      const name = file.name.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
-      sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
-      sliced.unshift({ name, colours: r.colours, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
-      screen.go("files");
-      sliceStatus.textContent = "Done. The Quadro file is on the printer screen below; tap it to print it.";
-    } else sliceStatus.textContent = "Done.";
-  } catch (err) {
-    sliceStatus.className = "slice-status e";
-    sliceStatus.textContent = err.name === "AbortError" ? "Slicing took too long." : err instanceof TypeError ? "The slicing service can't be reached." : err.message;
+// count a number up from 0 when results arrive
+function countUp(el, to, fmt) {
+  const t0 = performance.now(), T = 1000;
+  const step = (t) => { const f = Math.min(1, (t - t0) / T), e = 1 - Math.pow(1 - f, 3); el.textContent = fmt(to * e); if (f < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+// one bar = the 4 kg: a block per print, blue for what ends up in the part and grey for the purge waste
+function printsBar(n, part, waste) {
+  const W = 1000, H = 22, each = (W * (part + waste)) / SPOOLS_G, gap = Math.min(2, each * 0.2);
+  if (n > 300) return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><rect width="${(W * n * part) / SPOOLS_G}" height="${H}" fill="var(--u-accent)"/><rect x="${(W * n * part) / SPOOLS_G}" width="${(W * n * waste) / SPOOLS_G}" height="${H}" fill="var(--u-waste)"/></svg>`;
+  let out = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+  for (let i = 0; i < n; i++) {
+    const x = i * each, m = Math.max(0, (each - gap) * (part / (part + waste)));
+    out += `<rect x="${x.toFixed(2)}" width="${m.toFixed(2)}" height="${H}" fill="var(--u-accent)"/>`;
+    if (waste > 0) out += `<rect x="${(x + m).toFixed(2)}" width="${Math.max(0, each - gap - m).toFixed(2)}" height="${H}" fill="var(--u-waste)"/>`;
   }
-  delete sliceForm.dataset.busy;
+  return out + "</svg>";
+}
+let current = null, vs = "a1";
+function showCompare(r, label, thumb) {
+  current = { r, label, thumb };
+  $("results").hidden = false;
+  const rows = CMP.map((c) => ({ ...c, p: r.printers[c.key] || { error: "not sliced" } }));
+  const ok = rows.filter((x) => !x.p.error);
+  for (const x of ok) { x.waste = x.p.tower + x.p.flush; x.each = x.p.part + x.waste; x.n = Math.floor(SPOOLS_G / x.each); }
+  const img = thumb ? `<img class="pthumb" src="${thumb}" alt="">` : `<span class="pthumb"></span>`;
+  $("cmp").innerHTML = rows.map((x) => x.p.error
+    ? `<div class="pc">${img}<div class="pc-name">${x.name}</div><div class="pc-err">Could not slice for this printer: ${escHtml(x.p.error)}</div></div>`
+    : `<div class="pc${x.key === "quadro" ? " best" : ""}">${img}
+        <div class="pc-name">${x.name}</div><div class="chips"><span class="chip">${grams(x.p.part)} model</span>+<span class="chip w">${grams(x.waste)} waste</span></div>
+        <div class="pc-count"><b data-n="${x.n}">×0</b><span>prints from 4 kg</span></div>
+        <div class="pc-bar" role="img" aria-label="${x.n} prints: ${Math.round(x.n * x.p.part)} g of model and ${Math.round(x.n * x.waste)} g of waste out of 4 kg">${printsBar(x.n, x.p.part, x.waste)}</div></div>`).join("");
+  const maxT = Math.max(...ok.map((x) => x.p.time_s)), maxW = Math.max(...ok.map((x) => x.waste), 1);
+  const srow = (x, val, frac, note) => `<div class="srow${x.key === "quadro" ? " q" : ""}"><span>${x.short}${note ? `<small>${note}</small>` : ""}</span><div class="track"><i data-w="${Math.max(1.5, 100 * frac)}"></i></div><b>${val}</b></div>`;
+  $("stats").innerHTML = `<h3><span>Print time</span><span>per print</span></h3>` +
+    ok.map((x) => srow(x, hm(x.p.time_s), x.p.time_s / maxT, x.p.toolchanges + " colour changes")).join("") +
+    `<hr><h3><span>Purge waste</span><span>per print</span></h3>` +
+    ok.map((x) => srow(x, grams(x.waste), x.waste / maxW, x.p.flush ? grams(x.p.tower) + " prime tower + " + grams(x.p.flush) + " poop" : "prime tower")).join("");
+  $("cmp-model").textContent = label + " · each bar = 4 kg";
+  $("vs").innerHTML = ok.filter((x) => x.key !== "quadro").map((x) => `<button type="button" data-vs="${x.key}" aria-pressed="${x.key === vs}">vs ${x.short}</button>`).join("");
+  if (!ok.some((x) => x.key === vs) && ok.length > 1) vs = ok.find((x) => x.key !== "quadro").key;
+  showMonth();
+  $("up-foot").textContent = "Sliced with OrcaSlicer 2.4.2 using each printer's standard 0.20 mm PLA profile. Waste is the prime tower, plus the A1's purge (poop). Monthly figures assume 30 days.";
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll("#stats [data-w]").forEach((i) => (i.style.width = i.dataset.w + "%"));
+    document.querySelectorAll("#cmp .pc-bar").forEach((b) => b.classList.add("in"));
+    document.querySelectorAll("#cmp [data-n]").forEach((b) => countUp(b, Number(b.dataset.n), (v) => "×" + Math.round(v)));
+  }));
+}
+// a month of this print on Quadro against the chosen printer, at the visitor's prints a day and filament price
+function showMonth() {
+  if (!current) return;
+  $("month-note").textContent = "";
+  const P = current.r.printers, q = P.quadro, o = P[vs];
+  const tiles = $("tiles");
+  if (!q || q.error || !o || o.error) { tiles.innerHTML = ""; return; }
+  const perDay = Math.max(1, Number($("per-day").value) || 2), perKg = Math.max(0, Number($("per-kg").value) || 25);
+  const wq = q.tower + q.flush, wo = o.tower + o.flush, name = CMP.find((c) => c.key === vs).short;
+  const money = ((wo - wq) * perDay * 30 * perKg) / 1000, hours = ((o.time_s - q.time_s) * perDay * 30) / 3600, ratio = o.time_s / q.time_s;
+  const tile = (value, text, neg) => `<div class="tile${neg ? " neg" : ""}"><b>${value}</b><span>${text}</span></div>`;
+  tiles.innerHTML =
+    tile((money < 0 ? "−$" : "$") + Math.abs(money).toFixed(Math.abs(money) < 10 ? 1 : 0), money >= 0 ? `Filament saved per month<br>vs ${name}` : `More filament per month<br>than ${name}`, money < 0) +
+    tile(Math.abs(hours).toFixed(Math.abs(hours) < 10 ? 1 : 0) + " h", hours >= 0 ? `Printer time freed per month<br>vs ${name}` : `More printer time per month<br>than ${name}`, hours < 0) +
+    "" + tile(ratio.toFixed(1) + "×", ratio >= 1 ? `More prints per day<br>than ${name}, printing all day` : `As many prints per day<br>as ${name}, printing all day`, ratio < 1);
+  // a day only has 24 hours: say so when the chosen rate does not fit
+  const late = [[q, "Quadro"], [o, name]].filter(([x]) => (x.time_s * perDay) / 3600 > 24).map(([x, n]) => `${n} needs ${((x.time_s * perDay) / 3600).toFixed(1)} h a day for ${perDay} prints`);
+  if (late.length) $("month-note").textContent = "More than a day: " + late.join("; ") + ". The time figure counts the hours anyway.";
+}
+$("vs").addEventListener("click", (e) => { const b = e.target.closest("[data-vs]"); if (!b) return; vs = b.dataset.vs; $("vs").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b)); showMonth(); });
+for (const id of ["per-day", "per-kg"]) $(id).addEventListener("input", showMonth);
+
+// put a sliced Quadro file on the printer's screen
+function addToScreen(fileName, r, image) {
+  const q = r.printers.quadro;
+  if (!q || q.error) return false;
+  const name = fileName.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
+  sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
+  sliced.unshift({ name, colours: r.colours, image, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
+  return name;
+}
+// once a model is sliced its print starts on the 3D printer straight away, at 10x, like a timelapse
+function playTimelapse(name) {
+  if (!name || !ready || !K) return;
+  log("SDCARD_PRINT_FILE FILENAME=" + name, "u");
+  host.print.start(name);
+  const fast = document.querySelector('#speed [data-speed="10"]'); if (fast && fast.getAttribute("aria-pressed") !== "true") fast.click();
+  setView("iso");
+  $("stage").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+// the example models: a picture each, results straight from the file
+$("samples").innerHTML = SAMPLES.map((m) => `<button type="button" class="sample" data-sample="${m.id}" aria-pressed="false"><img src="up/${m.id}.png" alt=""><span><b>${m.name}</b><small>${m.note}</small></span></button>`).join("");
+$("samples").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-sample]");
+  if (!b || working) return;
+  const m = SAMPLES.find((x) => x.id === b.dataset.sample);
+  $("samples").querySelectorAll(".sample").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  try {
+    const r = await (await fetch("up/" + m.id + ".json")).json();
+    drop.dataset.state = "done"; $("work-file").textContent = m.name; $("work-clock").textContent = "";
+    $("work-thumb").innerHTML = `<img src="up/${m.id}.png" alt="">`;
+    $("work-upload").hidden = true;
+    $("work-printers").innerHTML = CMP.map((c) => `<div class="work-row ok"><span>${c.name}</span><div class="track"><i style="width:100%"></i></div><em>sliced</em></div>`).join("");
+    showCompare(r, m.name + " (example, sliced in advance)", "up/" + m.id + ".png");
+    const onScreen = addToScreen(m.id + "_example.3mf", r, "up/" + m.id + ".png");
+    note("Example model, sliced in advance by the same service. Its print is playing on the printer below.", false, true, !!onScreen);
+    playTimelapse(onScreen);
+  } catch { note("Could not load the example.", true); }
 });
+
+// the drop zone: drag a file onto it, or tap it to choose one
+let working = false;
+drop.addEventListener("click", (e) => { if (working || e.target.closest("button")) e.preventDefault(); });
+for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); if (!working) drop.classList.add("over"); });
+for (const ev of ["dragleave", "drop"]) drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); });
+drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f && !working) sliceUpload(f); });
+upFile.addEventListener("change", () => { const f = upFile.files[0]; upFile.value = ""; if (f) sliceUpload(f); });
+
+function workRow(el, frac, text, cls) {
+  el.className = "work-row" + (cls ? " " + cls : "");
+  el.querySelector("i").style.width = Math.round(100 * frac) + "%";
+  el.querySelector("em").textContent = text;
+}
+function sliceUpload(file) {
+  $("samples").querySelectorAll(".sample").forEach((x) => x.setAttribute("aria-pressed", "false"));
+  $("work-thumb").innerHTML = "";
+  if (!/\.(3mf|stl)$/i.test(file.name)) { drop.dataset.state = "error"; $("work-file").textContent = file.name; $("work-clock").textContent = "";
+    $("work-upload").hidden = true; $("work-printers").innerHTML = ""; $("work-thumb").innerHTML = "<span>?</span>"; note("Upload a .3mf (with its colours) or an .stl file.", true, true); return; }
+  working = true; drop.dataset.state = "work";
+  $("work-file").textContent = file.name; $("work-upload").hidden = false;
+  const up = $("work-upload"), list = $("work-printers");
+  workRow(up, 0, "0%", "run");
+  list.innerHTML = CMP.map((c) => `<div class="work-row" data-k="${c.key}"><span>${c.name}</span><div class="track"><i></i></div><em>waiting</em></div>`).join("");
+  note("Uploading…");
+  const t0 = Date.now(), started = {}, finished = {};
+  let thumb = null;
+  // the slicer says when each printer is done; until then each bar eases towards 90% so it keeps moving
+  const tick = () => {
+    const s = (Date.now() - t0) / 1000;
+    $("work-clock").textContent = Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+    for (const c of CMP) {
+      const el = list.querySelector(`[data-k="${c.key}"]`);
+      if (started[c.key] && !finished[c.key]) workRow(el, 0.9 * (1 - Math.exp(-(Date.now() - started[c.key]) / 30000)), "slicing", "run");
+    }
+  };
+  const clock = setInterval(tick, 500);
+  const xhr = new XMLHttpRequest();
+  let seen = 0, result = null, failed = null;
+  xhr.open("POST", SLICER_URL + "/slice");
+  xhr.setRequestHeader("Accept", "application/x-ndjson");
+  xhr.setRequestHeader("X-Filename", file.name.replace(/[^\w.\- ]/g, "_"));
+  xhr.timeout = 900000;
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) workRow(up, e.loaded / e.total, Math.round((100 * e.loaded) / e.total) + "%", "run"); };
+  xhr.upload.onload = () => { workRow(up, 1, "done", "ok"); note("Uploaded. Waiting for the slicer…"); };
+  const onEvent = (ev) => {
+    if (ev.stage === "queued") note("The slicer is busy with another model; yours is next.");
+    if (ev.stage === "converting") note("Reading the STL…");
+    if (ev.stage === "slicing") {
+      if (ev.thumb) { thumb = ev.thumb; $("work-thumb").innerHTML = `<img src="${thumb}" alt="">`; }
+      note("Slicing for three printers. Detailed or painted models can take a few minutes.");
+      for (const c of CMP) started[c.key] = Date.now();
+    }
+    if (ev.done) {
+      finished[ev.done] = true;
+      const el = list.querySelector(`[data-k="${ev.done}"]`);
+      if (el) workRow(el, 1, ev.error ? "failed" : Math.round(ev.seconds) + " s", ev.error ? "bad" : "ok");
+    }
+    if (ev.result) result = ev.result;
+    if (ev.error) failed = ev.error;
+  };
+  xhr.onprogress = () => {
+    const text = xhr.responseText;
+    let nl;
+    while ((nl = text.indexOf("\n", seen)) >= 0) {
+      const line = text.slice(seen, nl); seen = nl + 1;
+      if (line.trim()) try { onEvent(JSON.parse(line)); } catch {}
+    }
+  };
+  const finish = (err) => {
+    clearInterval(clock); tick(); working = false;
+    if (!err && !result) err = failed || "The slicing service did not answer.";
+    if (err) { drop.dataset.state = "error"; if (!thumb) $("work-thumb").innerHTML = "<span>!</span>"; note(err, true, true); return; }
+    drop.dataset.state = "done";
+    const q = result.printers.quadro;
+    if (!thumb && q && q.toolpath) { thumb = renderThumb(q.toolpath, result.colours); if (thumb) $("work-thumb").innerHTML = `<img src="${thumb}" alt="">`; }
+    showCompare(result, file.name, thumb);
+    const onScreen = addToScreen(file.name, result, thumb);
+    note(onScreen ? "Done. Quadro is printing it below, and the file is on the printer screen." : "Done.", false, true, !!onScreen);
+    playTimelapse(onScreen);
+  };
+  xhr.onload = () => {
+    xhr.onprogress();
+    // a slicer without the progress stream answers with the plain JSON results
+    const rest = xhr.responseText.slice(seen).trim();
+    if (!result && rest) try { const r = JSON.parse(rest); if (r.printers) result = r; else if (r.error) failed = r.error; } catch {}
+    finish(xhr.status >= 400 && !result ? failed || "The slicing service refused the file (" + xhr.status + ")." : null);
+  };
+  xhr.onerror = () => finish("The slicing service can't be reached.");
+  xhr.ontimeout = () => finish("Slicing took too long for this model.");
+  xhr.send(file);
+}
+function note(text, error = false, again = false, print = false) {
+  const p = $("work-note");
+  p.className = "work-note" + (error ? " e" : "");
+  p.textContent = text;
+  if (print) { const b = document.createElement("button"); b.type = "button"; b.textContent = "Open it on the printer screen"; b.onclick = () => { document.querySelector(".screen-wrap").scrollIntoView({ behavior: "smooth", block: "center" }); screen.go("files"); }; p.append(b); }
+  if (again) { const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.textContent = "Upload another"; b.onclick = () => upFile.click(); p.append(b); }
+}
 
 fetch(CONFIG_URL).then((r) => r.json()).then((config) => { startKlipper(config); addPin(config.bedPin.T0); }).catch((e) => log("!! Could not load the printer config: " + e.message, "e"));
 
