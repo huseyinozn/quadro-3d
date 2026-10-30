@@ -8,6 +8,7 @@
   "max_turns": 6,
   "per_ip_per_hour": 40,
   "origins": [
+    "https://calculator.coprint3d.com",
     "https://huseyinozn.github.io",
     "null"
   ],
