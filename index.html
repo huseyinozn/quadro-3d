@@ -1588,11 +1588,11 @@ const CMP = [                                         // the order the cards sho
   { key: "u1", name: "Snapmaker U1", short: "Snapmaker U1" },
   { key: "a1", name: "Bambu Lab A1 combo", short: "Bambu A1 combo" },
 ];
-// three models sliced in advance by the same service (up/*.json), for visitors without a file of their own
+// three models sliced in advance by the same service (up/*.json, pictures up/*.png), for visitors without a file of their own
 const SAMPLES = [
   { id: "cubes", name: "Colour test cubes", note: "4 cubes, every layer in 4 colours · 450 colour changes" },
-  { id: "coaster", name: "Checker coaster", note: "16 tiles in 4 colours · 60 colour changes" },
-  { id: "vase", name: "Striped vase", note: "4 colour bands stacked · 3 colour changes" },
+  { id: "dragon", name: "Dragon on a book", note: "3 colours · 319 colour changes" },
+  { id: "toucan", name: "Cute toucan", note: "4 colours · 667 colour changes" },
 ];
 const drop = $("drop"), upFile = $("up-file");
 const hm = (s) => { s = Math.round(s / 60); return Math.floor(s / 60) + "h " + String(s % 60).padStart(2, "0") + "m"; };
