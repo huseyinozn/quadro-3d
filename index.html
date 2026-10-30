@@ -193,6 +193,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .tile span { font-size: 15px; line-height: 1.3; opacity: .92; }
 .tile.neg { background: var(--u-bg) !important; color: var(--u-ink); border: 1px solid var(--u-line); }
 .foot { margin: 0; color: var(--u-muted); font-size: 13px; text-align: right; }
+.month-sub { margin: 2px 0 0; font-size: 13px; color: var(--u-muted); }
 .month-note { margin: 0; font-size: 13px; color: #a15c00; } .month-note:empty { display: none; }
 /* the printer's 5" screen in its housing; the screen itself stays the printer's own dark UI */
 .screen-wrap { background: radial-gradient(130% 90% at 50% 105%, #cfe5fa 0%, #e9f1f9 45%, #f6f7f9 100%); }
@@ -278,7 +279,8 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         <div class="stats" id="stats"></div>
         <div class="month">
           <div class="month-head">
-            <h3>What it means in a month</h3>
+            <div><h3>Quadro's monthly advantage over other multi-colour printers</h3>
+            <p class="month-sub">For this model, at the prints a day and filament price you set, against the printer you choose.</p></div>
             <div class="month-set">
               <span class="seg" id="vs" role="group" aria-label="Compared with"></span>
               <label><input id="per-day" type="number" min="1" max="24" step="1" value="2"> prints a day</label>
