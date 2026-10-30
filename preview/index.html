@@ -143,8 +143,11 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .sample img { width: 76px; height: 76px; border-radius: 10px; background: var(--u-soft); object-fit: contain; }
 .sample b { display: block; font-size: 15px; font-weight: 600; }
 .sample small { display: block; color: var(--u-muted); font-size: 12.5px; line-height: 1.35; }
-.results { display: grid; gap: 14px; }
-.results[hidden] { display: none; }
+.results-wrap[hidden] { display: none; }
+.sim-head { display: grid; gap: 6px; }
+.sim-head .eyebrow { font-size: 13px; color: var(--muted); letter-spacing: .02em; }
+.sim-head h1 { font-family: Poppins, var(--sans); font-size: clamp(24px, 4vw, 34px); line-height: 1.15; }
+.sim-head p { margin: 0; color: var(--muted); font-size: 15px; max-width: 78ch; }
 .res-head { text-align: center; } .res-head h3 { font-size: 22px; } .res-head p { margin-inline: auto; }
 .spools { display: block; width: min(100%, 640px); height: auto; margin: 0 auto -44px; position: relative; z-index: 0; }
 .cmp { display: grid; gap: 12px; position: relative; z-index: 1; }
@@ -215,33 +218,13 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 </style>
 
 <div class="page">
-  <header>
-    <h1>Co Print Quadro</h1>
-    <p>Four independent toolheads on one X beam, parking in Qdock stations at both ends</p>
+  <header class="sim-head">
+    <span class="eyebrow">Co Print Quadro · four independent toolheads on one X beam</span>
+    <h1 id="up-title">Quadro Printing Time &amp; Waste Simulator</h1>
+    <p>Save your model as a .3mf from Bambu Studio, Snapmaker Orca or OrcaSlicer, with its colours painted or assigned, and drop it here. It is sliced for Quadro and two other multi-colour printers at once, so you see how Quadro prints it, how long it takes on each printer, how much filament each one purges, and how many prints four 1 kg spools give. Then print it on Quadro's own screen below.</p>
   </header>
 
-  <div class="stage" id="stage">
-    <div class="loading" id="loading">Loading model…</div>
-    <div class="hud"><span>Drag to rotate · pinch to zoom</span><span id="readout"><b>Ready</b></span></div>
-  </div>
-
-  <div class="desk">
-    <div class="row">
-      <button id="skip">Skip 10 layers</button>
-      <button id="clear-bed">Clear bed</button>
-      <span class="label">Playback</span>
-      <span class="speed" id="speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button></span>
-    </div>
-    <div class="row">
-      <span class="label">View</span>
-      <button data-view="front">Front</button><button data-view="iso">Isometric</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="dock">Qdock</button><button data-view="part">Part</button><button data-view="room">Desk</button><button id="room-toggle">Hide room</button>
-    </div>
-
-    <section class="up" id="upload" aria-labelledby="up-title">
-      <div class="up-head">
-        <h2 id="up-title">Quadro Printing Time &amp; Waste Simulator</h2>
-        <p>Save your model as a .3mf from Bambu Studio, Snapmaker Orca or OrcaSlicer, with its colours painted or assigned, and drop it here. It is sliced for Quadro and two other multi-colour printers at once, so you see how Quadro prints it, how long it takes on each printer, how much filament each one purges, and how many prints four 1 kg spools give. Then print it on Quadro's own screen below.</p>
-      </div>
+    <section class="up" id="upload" aria-label="Upload a model">
       <label class="drop" id="drop" data-state="idle">
         <input type="file" id="up-file" accept=".3mf,.stl" hidden>
         <div class="drop-idle">
@@ -264,7 +247,27 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
         <h3>No model at hand? Try one of these</h3>
         <div class="sample-list" id="samples"></div>
       </div>
-      <div class="results" id="results" hidden>
+    </section>
+
+  <div class="stage" id="stage">
+    <div class="loading" id="loading">Loading model…</div>
+    <div class="hud"><span>Drag to rotate · pinch to zoom</span><span id="readout"><b>Ready</b></span></div>
+  </div>
+
+  <div class="desk">
+    <div class="row">
+      <button id="skip">Skip 10 layers</button>
+      <button id="clear-bed">Clear bed</button>
+      <span class="label">Playback</span>
+      <span class="speed" id="speed"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button></span>
+    </div>
+    <div class="row">
+      <span class="label">View</span>
+      <button data-view="front">Front</button><button data-view="iso">Isometric</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="dock">Qdock</button><button data-view="part">Part</button><button data-view="room">Desk</button><button id="room-toggle">Show room</button>
+    </div>
+
+
+    <section class="up results-wrap" id="results" hidden aria-label="Results">
         <div class="res-head">
           <h3>How many of this print do 4 kg of filament make?</h3>
           <p>Four 1 kg spools, one per colour. Each bar is the whole 4 kg: blue is printed model, grey is purge waste, one block per print.</p>
@@ -286,7 +289,6 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
           <p class="month-note" id="month-note"></p>
         </div>
         <p class="foot" id="up-foot"></p>
-      </div>
     </section>
 
     <section class="screen-wrap" aria-labelledby="screen-title">
@@ -854,9 +856,10 @@ loadModel().then((gltf) => {
   }
   buildRuns();
   addRoom();
+  roomGroup.visible = false;                                      // the printer alone at first; "Show room" or Desk brings the room
   ready = true;
   document.getElementById("loading").remove();
-  setView("room", true);
+  setView("iso", true);
   setActive(-1);
   draw();
   run();
@@ -1002,13 +1005,15 @@ function chair(x, floor, z) {
     box(0.06, 0.025, 0.25, blk, x + s * 0.225, floor + 0.672, z - 0.02);
   }
 }
-document.getElementById("room-toggle").addEventListener("click", (e) => {
-  roomGroup.visible = !roomGroup.visible; e.target.textContent = roomGroup.visible ? "Hide room" : "Show room"; dirty = true; run();
+function showRoom(on) { roomGroup.visible = on; $("room-toggle").textContent = on ? "Hide room" : "Show room"; dirty = true; run(); }
+document.getElementById("room-toggle").addEventListener("click", () => {
+  showRoom(!roomGroup.visible);
 });
 
 const VIEWS = { front: [180, 8, 0.95], iso: [215, 22, 1.05], side: [270, 12, 1.05], top: [180, 80, 1.0], dock: [160, 14, 0.5], part: [205, 28, 0.28], room: [205, 16, 2.5] };
 let tween = null;
 function setView(name, instant) {
+  if (name === "room" && !roomGroup.visible && roomGroup.children.length) showRoom(true);
   const [az, el, k] = VIEWS[name];
   const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el), d = name === "dock" || name === "part" || name === "room" ? k : radius * 2.4 * k;
   const target = name === "dock" ? new THREE.Vector3(0.3, 0.05, 0.18)
@@ -1711,10 +1716,17 @@ function addToScreen(fileName, r, image) {
   const name = fileName.replace(/\.(3mf|stl)$/i, "").replace(/[^\w.\-]+/g, "_") + ".gcode";
   sliced.splice(0, sliced.length, ...sliced.filter((u) => u.name !== name));
   sliced.unshift({ name, colours: r.colours, image, ...q, gcode: r.job ? SLICER_URL + "/gcode/" + r.job : null });
-  screen.go("files");
-  return true;
+  return name;
 }
-const scrollToResults = () => $("results").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+// once a model is sliced its print starts on the 3D printer straight away, at 10x, like a timelapse
+function playTimelapse(name) {
+  if (!name || !ready || !K) return;
+  log("SDCARD_PRINT_FILE FILENAME=" + name, "u");
+  host.print.start(name);
+  const fast = document.querySelector('#speed [data-speed="10"]'); if (fast && fast.getAttribute("aria-pressed") !== "true") fast.click();
+  setView("iso");
+  $("stage").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
 
 // the example models: a picture each, results straight from the file
 $("samples").innerHTML = SAMPLES.map((m) => `<button type="button" class="sample" data-sample="${m.id}" aria-pressed="false"><img src="up/${m.id}.png" alt=""><span><b>${m.name}</b><small>${m.note}</small></span></button>`).join("");
@@ -1731,8 +1743,8 @@ $("samples").addEventListener("click", async (e) => {
     $("work-printers").innerHTML = CMP.map((c) => `<div class="work-row ok"><span>${c.name}</span><div class="track"><i style="width:100%"></i></div><em>sliced</em></div>`).join("");
     showCompare(r, m.name + " (example, sliced in advance)", "up/" + m.id + ".png");
     const onScreen = addToScreen(m.id + "_example.3mf", r, "up/" + m.id + ".png");
-    note("Example model, sliced in advance by the same service.", false, true, onScreen);
-    scrollToResults();
+    note("Example model, sliced in advance by the same service. Its print is playing on the printer below.", false, true, !!onScreen);
+    playTimelapse(onScreen);
   } catch { note("Could not load the example.", true); }
 });
 
@@ -1812,8 +1824,9 @@ function sliceUpload(file) {
     const q = result.printers.quadro;
     if (!thumb && q && q.toolpath) { thumb = renderThumb(q.toolpath, result.colours); if (thumb) $("work-thumb").innerHTML = `<img src="${thumb}" alt="">`; }
     showCompare(result, file.name, thumb);
-    note(addToScreen(file.name, result, thumb) ? "Done. The Quadro file is on the printer screen." : "Done.", false, true, !!(q && !q.error));
-    scrollToResults();
+    const onScreen = addToScreen(file.name, result, thumb);
+    note(onScreen ? "Done. Quadro is printing it below, and the file is on the printer screen." : "Done.", false, true, !!onScreen);
+    playTimelapse(onScreen);
   };
   xhr.onload = () => {
     xhr.onprogress();
@@ -1830,7 +1843,7 @@ function note(text, error = false, again = false, print = false) {
   const p = $("work-note");
   p.className = "work-note" + (error ? " e" : "");
   p.textContent = text;
-  if (print) { const b = document.createElement("button"); b.type = "button"; b.textContent = "Print it on the screen"; b.onclick = () => { document.querySelector(".screen-wrap").scrollIntoView({ behavior: "smooth", block: "center" }); screen.go("files"); }; p.append(b); }
+  if (print) { const b = document.createElement("button"); b.type = "button"; b.textContent = "Open it on the printer screen"; b.onclick = () => { document.querySelector(".screen-wrap").scrollIntoView({ behavior: "smooth", block: "center" }); screen.go("files"); }; p.append(b); }
   if (again) { const b = document.createElement("button"); b.type = "button"; b.className = "ghost"; b.textContent = "Upload another"; b.onclick = () => upFile.click(); p.append(b); }
 }
 
