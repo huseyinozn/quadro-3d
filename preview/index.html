@@ -136,7 +136,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .work-note button.ghost { background: var(--u-bg); color: var(--u-accent); }
 .samples { display: grid; gap: 10px; }
 .samples h3 { font-weight: 500; color: var(--u-muted); font-size: 14px; }
-.sample-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sample-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .sample { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; text-align: left; background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 14px; padding: 10px; min-height: 0; font-family: inherit; color: var(--u-ink); transition: border-color .2s, transform .2s, box-shadow .2s; }
 .sample:hover { border-color: var(--u-accent); transform: translateY(-2px); box-shadow: 0 10px 22px -16px rgba(20,40,80,.5); }
 .sample[aria-pressed="true"] { border: 2px solid var(--u-accent); padding: 9px; }
@@ -159,6 +159,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; color: var(--u-muted); }
 .chip { background: var(--u-soft); border: 1px solid var(--u-line); border-radius: 8px; padding: 2px 10px; font-size: 14px; font-weight: 500; color: var(--u-ink); white-space: nowrap; }
 .pc.best .chip.w { color: var(--u-accent); border: 1.5px dashed var(--u-accent); background: #f3f7fe; }
+.chip.z { background: var(--u-good); border-color: var(--u-good); color: #fff; }
 .pc-count { text-align: right; }
 .pc-count b { display: block; font-size: 52px; line-height: 1; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: #9aa0a8; }
 .pc.best .pc-count b { color: var(--u-accent); }
@@ -1592,13 +1593,14 @@ const CMP = [                                         // the order the cards sho
 ];
 // three models sliced in advance by the same service (up/*.json, pictures up/*.png), for visitors without a file of their own
 const SAMPLES = [
+  { id: "qtest", name: "Quadro test print", note: "4 colours · 309 colour changes · Quadro in zero-waste mode, no prime tower" },
   { id: "cubes", name: "Colour test cubes", note: "4 cubes, every layer in 4 colours · 450 colour changes" },
   { id: "dragon", name: "Dragon on a book", note: "3 colours · 319 colour changes" },
   { id: "toucan", name: "Cute toucan", note: "4 colours · 667 colour changes" },
 ];
 const drop = $("drop"), upFile = $("up-file");
 const hm = (s) => { s = Math.round(s / 60); return Math.floor(s / 60) + "h " + String(s % 60).padStart(2, "0") + "m"; };
-const grams = (g) => (g >= 100 ? Math.round(g) : g >= 10 ? g.toFixed(0) : g.toFixed(1)) + " g";
+const grams = (g) => (g === 0 ? "0" : g >= 100 ? Math.round(g) : g >= 10 ? g.toFixed(0) : g.toFixed(1)) + " g";
 const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 // A small picture of a sliced model drawn from its toolpath: the walls and top surfaces, layer by layer from below,
@@ -1669,7 +1671,7 @@ function showCompare(r, label, thumb) {
   $("cmp").innerHTML = rows.map((x) => x.p.error
     ? `<div class="pc">${img}<div class="pc-name">${x.name}</div><div class="pc-err">Could not slice for this printer: ${escHtml(x.p.error)}</div></div>`
     : `<div class="pc${x.key === "quadro" ? " best" : ""}">${img}
-        <div class="pc-name">${x.name}</div><div class="chips"><span class="chip">${grams(x.p.part)} model</span>+<span class="chip w">${grams(x.waste)} waste</span></div>
+        <div class="pc-name">${x.name}</div><div class="chips"><span class="chip">${grams(x.p.part)} model</span>+<span class="chip w">${grams(x.waste)} waste</span>${x.p.zero_waste ? '<span class="chip z">zero-waste mode</span>' : ""}</div>
         <div class="pc-count"><b data-n="${x.n}">×0</b><span>prints from 4 kg</span></div>
         <div class="pc-bar" role="img" aria-label="${x.n} prints: ${Math.round(x.n * x.p.part)} g of model and ${Math.round(x.n * x.waste)} g of waste out of 4 kg">${printsBar(x.n, x.p.part, x.waste)}</div></div>`).join("");
   const maxT = Math.max(...ok.map((x) => x.p.time_s)), maxW = Math.max(...ok.map((x) => x.waste), 1);
@@ -1677,12 +1679,12 @@ function showCompare(r, label, thumb) {
   $("stats").innerHTML = `<h3><span>Print time</span><span>per print</span></h3>` +
     ok.map((x) => srow(x, hm(x.p.time_s), x.p.time_s / maxT, x.p.toolchanges + " colour changes")).join("") +
     `<hr><h3><span>Purge waste</span><span>per print</span></h3>` +
-    ok.map((x) => srow(x, grams(x.waste), x.waste / maxW, x.p.flush ? grams(x.p.tower) + " prime tower + " + grams(x.p.flush) + " poop" : "prime tower")).join("");
+    ok.map((x) => srow(x, grams(x.waste), x.waste / maxW, x.p.zero_waste ? "zero-waste mode, no prime tower" : x.p.flush ? grams(x.p.tower) + " prime tower + " + grams(x.p.flush) + " poop" : "prime tower")).join("");
   $("cmp-model").textContent = label + " · each bar = 4 kg";
   $("vs").innerHTML = ok.filter((x) => x.key !== "quadro").map((x) => `<button type="button" data-vs="${x.key}" aria-pressed="${x.key === vs}">vs ${x.short}</button>`).join("");
   if (!ok.some((x) => x.key === vs) && ok.length > 1) vs = ok.find((x) => x.key !== "quadro").key;
   showMonth();
-  $("up-foot").textContent = "Sliced with OrcaSlicer 2.4.2 using each printer's standard 0.20 mm PLA profile. Waste is the prime tower, plus the A1's purge (poop). Monthly figures assume 30 days.";
+  $("up-foot").textContent = "Sliced with OrcaSlicer 2.4.2 using each printer's standard 0.20 mm PLA profile. Waste is the prime tower, plus the A1's purge (poop)." + (r.printers.quadro && r.printers.quadro.zero_waste ? " Quadro was sliced in zero-waste mode: each toolhead keeps its own filament, so it prints without a prime tower." : "") + " Monthly figures assume 30 days.";
   requestAnimationFrame(() => requestAnimationFrame(() => {
     document.querySelectorAll("#stats [data-w]").forEach((i) => (i.style.width = i.dataset.w + "%"));
     document.querySelectorAll("#cmp .pc-bar").forEach((b) => b.classList.add("in"));
