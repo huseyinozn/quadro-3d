@@ -136,11 +136,11 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
 .work-note button.ghost { background: var(--u-bg); color: var(--u-accent); }
 .samples { display: grid; gap: 10px; }
 .samples h3 { font-weight: 500; color: var(--u-muted); font-size: 14px; }
-.sample-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.sample { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; text-align: left; background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 14px; padding: 10px; min-height: 0; font-family: inherit; color: var(--u-ink); transition: border-color .2s, transform .2s, box-shadow .2s; }
+.sample-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.sample { display: grid; grid-template-rows: auto 1fr; justify-items: center; gap: 8px; align-items: start; text-align: center; background: var(--u-bg); border: 1px solid var(--u-line); border-radius: 14px; padding: 10px; min-height: 0; font-family: inherit; color: var(--u-ink); transition: border-color .2s, transform .2s, box-shadow .2s; }
 .sample:hover { border-color: var(--u-accent); transform: translateY(-2px); box-shadow: 0 10px 22px -16px rgba(20,40,80,.5); }
 .sample[aria-pressed="true"] { border: 2px solid var(--u-accent); padding: 9px; }
-.sample img { width: 76px; height: 76px; border-radius: 10px; background: var(--u-soft); object-fit: contain; }
+.sample img { width: 100%; max-width: 150px; aspect-ratio: 1; height: auto; border-radius: 10px; background: var(--u-soft); object-fit: contain; }
 .sample b { display: block; font-size: 15px; font-weight: 600; }
 .sample small { display: block; color: var(--u-muted); font-size: 12.5px; line-height: 1.35; }
 .results-wrap[hidden] { display: none; }
@@ -212,7 +212,7 @@ tr.on td { color: #fff; } tr.on td:first-child::after { content: " ●"; color: 
   .srow > span, .work-row > span { grid-area: label; } .srow > b, .work-row > em { grid-area: val; } .srow > .track, .work-row > .track { grid-area: track; }
   .srow span small { display: inline; margin-left: 6px; }
   .drop-work { padding: 14px; } .work-note button { margin: 8px 8px 0 0; }
-  .sample-list { grid-template-columns: 1fr; } .res-head h3 { font-size: 19px; } .spools { margin-bottom: -26px; }
+  .sample-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .res-head h3 { font-size: 19px; } .spools { margin-bottom: -26px; }
   .tiles { grid-template-columns: 1fr; } .tile { min-height: 0; } .tile b { font-size: 36px; }
   .device { padding: 2%; } .bezel { padding: 4.5% 4.5% 5%; } }
 .about { margin: 0; font-size: 13px; color: var(--muted); max-width: 75ch; }
@@ -1597,6 +1597,7 @@ const SAMPLES = [
   { id: "cubes", name: "Colour test cubes", note: "4 cubes, every layer in 4 colours · 450 colour changes" },
   { id: "dragon", name: "Dragon on a book", note: "3 colours · 319 colour changes" },
   { id: "toucan", name: "Cute toucan", note: "4 colours · 667 colour changes" },
+  { id: "t22", name: "Moai and Sierpinski tower", note: "4 colours · 2115 colour changes" },
 ];
 const drop = $("drop"), upFile = $("up-file");
 const hm = (s) => { s = Math.round(s / 60); return Math.floor(s / 60) + "h " + String(s % 60).padStart(2, "0") + "m"; };
